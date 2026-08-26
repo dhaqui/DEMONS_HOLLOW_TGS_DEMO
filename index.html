@@ -57,7 +57,7 @@
   #furyReadyMsg{font-size:10px;color:#7fd0ff;letter-spacing:1px;opacity:0;transition:opacity .3s;text-shadow:0 0 6px #000;white-space:nowrap;}
   #furyReadyMsg.show{opacity:1;}
   @media (max-width:640px){
-    #hud{padding:4px 60px 4px 6px;min-height:44px;gap:1vw;}
+    #hud{padding:4px 46px 4px 6px;min-height:44px;gap:1vw;}
     .orb{width:32px;height:32px;border-width:2px;}
     .orb .label{font-size:8px;}
     #killCount{font-size:10px;}
@@ -78,9 +78,25 @@
     font-size:12px;letter-spacing:2px;padding:8px 14px;border-radius:4px;cursor:pointer;
     box-shadow:0 4px 10px rgba(0,0,0,.5);display:none;}
   #shopBtn:hover{background:#123a63;}
+
+  /* view-mode toggle sits below the HUD bar on the LEFT (the right side is reserved for
+     shopBtn), so it never overlaps the HP/Fury gauges or the shop button. */
+  #viewModeBtn{position:absolute;top:62px;left:10px;z-index:15;pointer-events:auto;
+    background:linear-gradient(180deg,#0d2440,#071426);border:1px solid #0d5a99;color:#bfe3ff;
+    font-size:11px;letter-spacing:1px;padding:6px 10px;border-radius:4px;cursor:pointer;
+    box-shadow:0 4px 10px rgba(0,0,0,.5);display:none;}
+  #viewModeBtn:hover{background:#123a63;}
   @media (max-width:640px){
     #tip{display:none;} /* replaced by on-screen mobile controls */
-    #shopBtn{font-size:10px;padding:6px 10px;top:6px;right:6px;}
+    /* icon-only on mobile -- guarantees a small, fixed footprint so it can never overlap the
+       HUD gauges/kill-count text next to it, regardless of exact screen width */
+    /* note: JS toggles this element's display via el.style.* (inline-block/none), which
+       overrides any `display` set here -- so centering relies on line-height/text-align,
+       not flex, and still works regardless of which inline display value JS applies. */
+    #shopBtn{font-size:16px;padding:0;top:6px;right:6px;width:34px;height:34px;
+      line-height:34px;text-align:center;}
+    .shopBtnLabel{display:none;}
+    #viewModeBtn{top:48px;left:6px;font-size:9px;padding:5px 8px;}
   }
 
   /* mobile virtual controller: joystick bottom-left, attack buttons bottom-right.
@@ -139,6 +155,7 @@
     padding:11px 22px;border-radius:22px;cursor:pointer;box-shadow:0 2px 6px rgba(0,0,0,.4);}
   .payBtn:hover{background:#ffb700;}
   .payBtn:disabled{opacity:.55;cursor:default;}
+  .payBtn .ppwrap{display:inline-flex;}
   .payBtn .pplogo{color:#003087;font-style:italic;font-weight:900;}
   .payBtn .pplogo2{color:#009cde;font-style:italic;font-weight:900;}
   .payBtn.big, .equipBtn.big{padding:13px 28px;font-size:14px;}
@@ -200,7 +217,8 @@
 <body>
 <canvas id="game"></canvas>
 
-<button id="shopBtn">⚔️ SHOP</button>
+<button id="shopBtn">⚔️<span class="shopBtnLabel"> SHOP</span></button>
+<button id="viewModeBtn" title="視点切替">◇ ISO</button>
 <div id="tip">WASD / クリックで移動　・　敵をクリック or Space で攻撃　・　Shift+クリックで渾身の一撃 (Fury満タン時)</div>
 
 <div id="hud" style="display:none;">
@@ -244,7 +262,7 @@
   <div class="stat" id="finalKills">Souls Slain: 0</div>
   <div class="stat" id="finalFloor">Floor Reached: 1</div>
   <button id="continueBuyBtn" class="payBtn big" style="margin-top:24px;max-width:360px;">
-    <span class="pplogo">Pay</span><span class="pplogo2">Pal</span>&nbsp;でライフを購入して続ける (&yen;300)
+    <span class="ppwrap"><span class="pplogo">Pay</span><span class="pplogo2">Pal</span></span>&nbsp;でライフを購入して続ける (&yen;300)
   </button>
   <div class="prompt" style="margin-top:20px;">クリックして最初からリトライ</div>
 </div>
@@ -268,6 +286,7 @@
     <button class="shopTab" data-cat="armor">🛡️ 防具</button>
     <button class="shopTab" data-cat="shield">🔰 盾</button>
     <button class="shopTab" data-cat="helmet">⛑️ 兜</button>
+    <button class="shopTab" data-cat="mount">🐎 騎乗</button>
     <button class="shopTab" data-cat="life">❤️ ライフ</button>
   </div>
   <div id="weaponGrid"></div>
@@ -316,6 +335,7 @@ function rotateAboutAxis(v, axis, angle){
   return V3.add(V3.add(term1,term2),term3);
 }
 function clamp(v,lo,hi){return Math.max(lo,Math.min(hi,v));}
+function smooth01(p){ p=clamp(p,0,1); return p*p*(3-2*p); }
 function lerp(a,b,t){return a+(b-a)*t;}
 
 // ---------------------------------------------------------- two-bone IK ---
@@ -354,11 +374,17 @@ function makeProportions(H, buildFactor){
   buildFactor = buildFactor||1;
   return {
     H,
-    thigh: 0.25*H, shin: 0.22*H,
-    torso: 0.30*H, neck: 0.06*H, headR: 0.065*H*buildFactor,
-    upperArm: 0.19*H*buildFactor, foreArm: 0.16*H*buildFactor,
-    hipHalfW: 0.095*H*buildFactor, shHalfW: 0.115*H*buildFactor,
-    limbR: 0.045*H*buildFactor, torsoR: 0.10*H*buildFactor,
+    // taller, more classically-proportioned (~8-heads-tall) build: legs/torso/neck lengthened
+    // relative to H, head ratio reduced (a bigger head-to-body ratio reads as short/chibi).
+    // hipHalfW is pulled way in -- legs now hang from underneath a slim torso instead of
+    // sprouting from its sides, which also reads as visibly longer legs. torsoR is slimmed
+    // to match. Limb thickness ratios stay put (that's the earlier "stick figure" fix).
+    thigh: 0.285*H, shin: 0.245*H,
+    torso: 0.325*H, neck: 0.068*H, headR: 0.062*H*buildFactor,
+    upperArm: 0.20*H*buildFactor, foreArm: 0.17*H*buildFactor,
+    hipHalfW: 0.058*H*buildFactor, shHalfW: 0.128*H*buildFactor,
+    limbR: 0.066*H*buildFactor, torsoR: 0.098*H*buildFactor,
+    chestR: 0.098*H*buildFactor, pelvisR: 0.082*H*buildFactor, // waist taper (chest wider than hips)
   };
 }
 
@@ -396,8 +422,10 @@ function buildPose(P, state){
   const lTgt = footTarget(state.phase, -1);
   const rTgt = footTarget((state.phase+0.5)%1, 1);
 
-  const lLeg = twoBoneIK(leftHip,  lTgt, P.thigh, P.shin, 1, {x:0,y:0,z:1});
-  const rLeg = twoBoneIK(rightHip, rTgt, P.thigh, P.shin, 1, {x:0,y:0,z:1});
+  // hingeSign=-1 makes the knee bulge forward (-z) as measured/verified -- the previous
+  // sign of +1 was making knees consistently bend backward (a "reverse knee" look).
+  const lLeg = twoBoneIK(leftHip,  lTgt, P.thigh, P.shin, -1, {x:0,y:0,z:1});
+  const rLeg = twoBoneIK(rightHip, rTgt, P.thigh, P.shin, -1, {x:0,y:0,z:1});
 
   const spineLean = state.moving? 0.035*Math.sin(state.phase*2*Math.PI*2) : Math.sin(idle*1.1)*0.01;
   let torsoTilt = 0;
@@ -413,17 +441,40 @@ function buildPose(P, state){
   let rightShoulder = V3.add(shouldersC, {x: P.shHalfW,y:0,z:0});
 
   let lHandTgt, rHandTgt, weaponSwing=0;
+  let rightPole = {x:0,y:0,z:-1}; // default forward pole; the attack branch below overrides
+  // this to track the swing continuously, avoiding the elbow flipping/popping mid-slash.
   if (state.attackT!=null){
     const t = clamp(state.attackT,0,1);
-    // windup (0-0.35) -> strike (0.35-0.7) -> recover (0.7-1)
-    let sw;
-    if (t<0.35) sw = -(t/0.35);            // wind up (negative = back/up)
-    else if (t<0.7) sw = (t-0.35)/0.35;    // strike forward 0..1
-    else sw = 1-((t-0.7)/0.3);             // recover back to 0
-    weaponSwing = sw;
-    const big = state.attackKind==='heavy' ? 1.4:1.0;
-    rHandTgt = V3.add(rightShoulder, {x:0.10*P.H, y:0.10*P.H - 0.30*P.H*Math.max(sw,0) + 0.20*P.H*Math.max(-sw,0), z:-0.10*P.H - 0.55*P.H*big*Math.max(sw,0) + 0.15*P.H*Math.max(-sw,0)});
+    const big = state.attackKind==='heavy' ? 1.3 : 1.0;
+    // Zelda-style horizontal slash: cock the blade back over the character's right shoulder
+    // during windup, then sweep it fast through a wide horizontal arc in front of the body to
+    // the left side (follow-through) -- a side-to-side cut instead of a forward thrust/chop.
+    // weaponSwing carries the current blade angle (radians, 0=forward) for VFX (slash trail).
+    const WINDUP_ANG = 1.05;        // ~60 deg cocked to the right/back
+    const FOLLOW_ANG = 1.30 * big;  // ~75-97 deg follow-through to the left (wider on heavy)
+    let swingAngle, liftT;
+    if (t<0.35){                    // windup: slow raise into the cocked position
+      const p = smooth01(t/0.35);
+      swingAngle = WINDUP_ANG*p; liftT = p;
+    } else if (t<0.7){              // strike: fast, even sweep through the front arc
+      const p = (t-0.35)/0.35;
+      swingAngle = WINDUP_ANG - (WINDUP_ANG+FOLLOW_ANG)*p; liftT = 1-p;
+    } else {                        // recover: ease the arm back down to rest
+      const p = smooth01((t-0.7)/0.3);
+      swingAngle = -FOLLOW_ANG*(1-p); liftT = 0;
+    }
+    weaponSwing = swingAngle;
+    const reach = (P.upperArm+P.foreArm) * 0.86;
+    rHandTgt = V3.add(rightShoulder, {
+      x: Math.sin(swingAngle)*reach*big,
+      y: 0.02*P.H + 0.16*P.H*liftT,
+      z: -Math.cos(swingAngle)*reach*big,
+    });
     lHandTgt = V3.add(leftShoulder, {x:-0.05*P.H, y:-0.05*P.H, z:0.10*P.H});
+    // pole vector rotates continuously with the swing (instead of staying fixed "forward")
+    // so the elbow trails naturally behind/above the blade through the whole arc instead of
+    // flipping to the wrong side once the hand crosses to the follow-through side.
+    rightPole = V3.norm({x:Math.sin(swingAngle)*0.4, y:0.6, z:-Math.cos(swingAngle)*0.4-0.4});
   } else if (state.deathT!=null){
     rHandTgt = V3.add(rightShoulder, {x:0.15*P.H, y:-0.25*P.H, z:0.05*P.H});
     lHandTgt = V3.add(leftShoulder,  {x:-0.15*P.H, y:-0.25*P.H, z:0.05*P.H});
@@ -434,7 +485,7 @@ function buildPose(P, state){
   }
 
   const lArm = twoBoneIK(leftShoulder,  lHandTgt, P.upperArm, P.foreArm, -1, {x:0,y:0,z:-1});
-  const rArm = twoBoneIK(rightShoulder, rHandTgt, P.upperArm, P.foreArm, -1, {x:0,y:0,z:-1});
+  const rArm = twoBoneIK(rightShoulder, rHandTgt, P.upperArm, P.foreArm, -1, rightPole);
 
   return {
     hipsC, leftHip, rightHip,
@@ -460,25 +511,63 @@ function resize(){
   canvas.height = Math.floor(innerHeight*DPR);
   canvas.style.width = innerWidth+'px';
   canvas.style.height = innerHeight+'px';
+  ctx.imageSmoothingEnabled = true;
 }
 window.addEventListener('resize', resize);
 const isTouchDevice = ('ontouchstart' in window) || (navigator.maxTouchPoints||0) > 0;
 resize();
 
-const cam = {x:0, z:0, scale: 44};
+const cam = {x:0, z:0, scale: 52};
 function screenCenter(){ return {x: canvas.width/2, y: canvas.height*0.42}; }
 
+// ---- view mode: 'iso' (flat axonometric, original) or 'perspective' (real pinhole camera) ----
+let viewMode = 'iso';
+const PERSP_BACK = 13;     // world units the camera sits back (toward the screen-near side)
+const PERSP_HEIGHT = 10.5; // world units the camera sits above the ground
+const PERSP_FOCAL = 620;   // focal length, in the same "pixel units" cam.scale*DPR already uses
+let perspCamPos = {x:0,y:0,z:0}, perspF = {x:0,y:-1,z:0}, perspR = {x:1,y:0,z:0}, perspU = {x:0,y:1,z:0};
+function updatePerspCamera(){
+  const backDir = {x:Math.SQRT1_2, y:0, z:Math.SQRT1_2}; // the ground diagonal iso treats as "near"
+  const lookAt = {x:cam.x, y:1.0, z:cam.z}; // aim a bit above the ground (roughly chest height)
+  perspCamPos = {x:cam.x+backDir.x*PERSP_BACK, y:PERSP_HEIGHT, z:cam.z+backDir.z*PERSP_BACK};
+  perspF = V3.norm(V3.sub(lookAt, perspCamPos));
+  perspR = V3.norm({x:-perspF.z, y:0, z:perspF.x});
+  perspU = V3.norm(V3.cross(perspR, perspF));
+}
 function projectIso(world){
   const sc = screenCenter();
+  if (viewMode === 'perspective'){
+    const rel = {x:world.x-perspCamPos.x, y:world.y-perspCamPos.y, z:world.z-perspCamPos.z};
+    const camX = V3.dot(rel, perspR);
+    const camY = V3.dot(rel, perspU);
+    const camZ = V3.dot(rel, perspF);
+    const safeZ = Math.max(1.2, camZ); // clamp so points behind/very near the camera don't blow up
+    const focal = PERSP_FOCAL*DPR;
+    const sx = camX*focal/safeZ + sc.x;
+    const sy = -camY*focal/safeZ + sc.y;
+    const depth = (world.x-cam.x) + (world.z-cam.z) + world.y*0.01;
+    const scaleMul = (PERSP_BACK*1.15)/safeZ; // ~1 near the look-at point, shrinks with distance
+    return {x:sx, y:sy, depth, scaleMul};
+  }
   const relX = world.x - cam.x, relZ = world.z - cam.z, y = world.y;
   const k = cam.scale*DPR;
   const sx = (relX - relZ)*k + sc.x;
   const sy = (relX + relZ)*k*0.5 - y*k + sc.y;
   const depth = relX + relZ + y*0.01;
-  return {x:sx, y:sy, depth};
+  return {x:sx, y:sy, depth, scaleMul:1};
 }
 function unprojectGround(sx, sy){
   const sc = screenCenter();
+  if (viewMode === 'perspective'){
+    // cast a ray from the camera through the screen point and intersect the y=0 ground plane
+    const focal = PERSP_FOCAL*DPR;
+    const dx = (sx-sc.x)/focal, dy = -(sy-sc.y)/focal;
+    const rayDir = V3.add(perspF, V3.add(V3.scale(perspR,dx), V3.scale(perspU,dy)));
+    if (Math.abs(rayDir.y) < 1e-5) return {x:cam.x, z:cam.z};
+    const t = -perspCamPos.y/rayDir.y;
+    if (t <= 0) return {x:cam.x, z:cam.z}; // ground plane behind the camera along this ray
+    return {x: perspCamPos.x+rayDir.x*t, z: perspCamPos.z+rayDir.z*t};
+  }
   const k = cam.scale*DPR;
   const A = (sx - sc.x)/k;
   const B = (sy - sc.y)/(k*0.5);
@@ -486,10 +575,34 @@ function unprojectGround(sx, sy){
   return {x: relX+cam.x, z: relZ+cam.z};
 }
 
+// Lighten/darken a #rrggbb hex color by `amt` (-1..1). Used to fake simple directional
+// lighting across each limb's cross-section so the 1bit dither pass below has real
+// luminance gradients to work with instead of flat silhouettes.
+function shadeColor(hex, amt){
+  if (!hex || hex[0] !== '#') return hex;
+  let r = parseInt(hex.slice(1,3),16), g = parseInt(hex.slice(3,5),16), b = parseInt(hex.slice(5,7),16);
+  const f = (v)=> Math.max(0, Math.min(255, Math.round(amt>=0 ? v+(255-v)*amt : v*(1+amt))));
+  r=f(r); g=f(g); b=f(b);
+  return '#'+r.toString(16).padStart(2,'0')+g.toString(16).padStart(2,'0')+b.toString(16).padStart(2,'0');
+}
+const capsuleGradCache = new Map();
 function drawCapsule(p1, p2, r, color){
   const a = projectIso(p1), b = projectIso(p2);
-  const rr = Math.max(1.4, r*cam.scale*DPR);
-  ctx.strokeStyle = color; ctx.lineWidth = rr*2; ctx.lineCap='round';
+  const rr = Math.max(1.4, r*cam.scale*DPR*((a.scaleMul+b.scaleMul)*0.5));
+  const dx = b.x-a.x, dy = b.y-a.y;
+  const len = Math.hypot(dx,dy) || 1;
+  const nx = -dy/len, ny = dx/len; // perpendicular axis across the tube's cross-section
+  const midx=(a.x+b.x)/2, midy=(a.y+b.y)/2;
+  const g = ctx.createLinearGradient(midx-nx*rr, midy-ny*rr, midx+nx*rr, midy+ny*rr);
+  // fixed key-light from upper-left: dark rim -> lit face -> highlight -> shadow rim.
+  // gives each limb a rounded, "inked cylinder" look once run through the dither pass.
+  let shades = capsuleGradCache.get(color);
+  if (!shades){ shades = [shadeColor(color,-0.55), color, shadeColor(color,0.35), shadeColor(color,-0.25)]; capsuleGradCache.set(color, shades); }
+  g.addColorStop(0, shades[0]);
+  g.addColorStop(0.42, shades[1]);
+  g.addColorStop(0.62, shades[2]);
+  g.addColorStop(1, shades[3]);
+  ctx.strokeStyle = g; ctx.lineWidth = rr*2; ctx.lineCap='round';
   ctx.beginPath(); ctx.moveTo(a.x,a.y); ctx.lineTo(b.x,b.y); ctx.stroke();
   return (a.depth+b.depth)/2;
 }
@@ -499,18 +612,42 @@ function buildBoneList(pose, P, palette, facing, originWorld){
   const j = {}; for (const k in pose){ if (k!=='weaponSwing') j[k]=toWorld(pose[k]); }
   const skin = palette.skin, cloth = palette.cloth, dark = palette.dark;
   const bulk = palette.armorBulk || 1;
+  // waist sits ~58% of the way down from shoulders to hips -- splitting the torso here into a
+  // wider chest and a narrower pelvis (instead of one uniform-radius tube) gives an actual
+  // waist taper instead of a rectangular block torso.
+  const waistC = V3.add(j.shouldersC, V3.scale(V3.sub(j.hipsC, j.shouldersC), 0.58));
   const list = [
-    {a:j.rightShoulder, b:j.rightElbow, r:P.limbR*0.95*bulk, c:cloth},
-    {a:j.rightElbow, b:j.rightHand, r:P.limbR*0.8, c:skin},
-    {a:j.leftShoulder, b:j.leftElbow, r:P.limbR*0.95*bulk, c:cloth},
-    {a:j.leftElbow, b:j.leftHand, r:P.limbR*0.8, c:skin},
-    {a:j.shouldersC, b:j.hipsC, r:P.torsoR*bulk, c:cloth,
+    {a:j.rightShoulder, b:j.rightElbow, r:P.limbR*1.02*bulk, c:cloth},
+    {a:j.rightElbow, b:j.rightHand, r:P.limbR*0.86, c:skin},
+    {a:j.leftShoulder, b:j.leftElbow, r:P.limbR*1.02*bulk, c:cloth},
+    {a:j.leftElbow, b:j.leftHand, r:P.limbR*0.86, c:skin},
+    {a:j.shouldersC, b:waistC, r:P.chestR*bulk, c:cloth,
      glow: !!palette.armorGlow, glowColor: cloth},
-    {a:j.rightHip, b:j.rightKnee, r:P.limbR*1.05*bulk, c:dark},
-    {a:j.rightKnee, b:j.rightFoot, r:P.limbR*0.85, c:dark},
-    {a:j.leftHip, b:j.leftKnee, r:P.limbR*1.05*bulk, c:dark},
-    {a:j.leftKnee, b:j.leftFoot, r:P.limbR*0.85, c:dark},
-    {a:j.neckTop, b:j.headC, r:P.limbR*0.7, c:skin},
+    {a:waistC, b:j.hipsC, r:P.pelvisR*bulk, c:cloth,
+     glow: !!palette.armorGlow, glowColor: cloth},
+    {a:j.rightHip, b:j.rightKnee, r:P.limbR*1.12*bulk, c:dark},
+    {a:j.rightKnee, b:j.rightFoot, r:P.limbR*0.92, c:dark},
+    {a:j.leftHip, b:j.leftKnee, r:P.limbR*1.12*bulk, c:dark},
+    {a:j.leftKnee, b:j.leftFoot, r:P.limbR*0.92, c:dark},
+    {a:j.neckTop, b:j.headC, r:P.limbR*0.78, c:skin},
+  ];
+  // filled joint "bulges" smooth over the seams where two differently-sized limb segments
+  // meet (shoulder/elbow/hip/knee) and give hands/feet real silhouette instead of the limb
+  // just trailing off into a thin rounded-cap tip -- this is the main fix for the
+  // "stick figure with weird joints" look.
+  const joints = [
+    {pos:j.rightShoulder, r:P.limbR*1.08*bulk, c:cloth},
+    {pos:j.leftShoulder,  r:P.limbR*1.08*bulk, c:cloth},
+    {pos:j.rightElbow, r:P.limbR*0.92, c:skin},
+    {pos:j.leftElbow,  r:P.limbR*0.92, c:skin},
+    {pos:j.rightHip, r:P.limbR*1.18*bulk, c:dark},
+    {pos:j.leftHip,  r:P.limbR*1.18*bulk, c:dark},
+    {pos:j.rightKnee, r:P.limbR*1.0, c:dark},
+    {pos:j.leftKnee,  r:P.limbR*1.0, c:dark},
+    {pos:j.rightHand, r:P.limbR*0.98, c:skin}, // fist
+    {pos:j.leftHand,  r:P.limbR*0.98, c:skin}, // fist / off-hand
+    {pos:j.rightFoot, r:P.limbR*1.05, c:dark}, // boot
+    {pos:j.leftFoot,  r:P.limbR*1.05, c:dark}, // boot
   ];
 
   const weaponType = palette.weaponType||'melee';
@@ -542,14 +679,27 @@ function buildBoneList(pose, P, palette, facing, originWorld){
                glow:!!palette.shieldGlow, glowColor:palette.shieldColor});
   }
 
-  return {list, j};
+  return {list, j, joints};
 }
 
+function drawJoint(pos, r, color){
+  const s = projectIso(pos);
+  const rr = Math.max(1.4, r*cam.scale*DPR*(s.scaleMul!=null?s.scaleMul:1));
+  let shades = capsuleGradCache.get('joint:'+color);
+  if (!shades){ shades = [shadeColor(color,0.3), color, shadeColor(color,-0.45)]; capsuleGradCache.set('joint:'+color, shades); }
+  const g = ctx.createRadialGradient(s.x-rr*0.3,s.y-rr*0.35,rr*0.15, s.x,s.y,rr);
+  g.addColorStop(0, shades[0]); g.addColorStop(0.6, shades[1]); g.addColorStop(1, shades[2]);
+  ctx.fillStyle = g;
+  ctx.beginPath(); ctx.arc(s.x,s.y,rr,0,Math.PI*2); ctx.fill();
+}
 function drawHumanoid(pose, P, palette, facing, originWorld){
-  const {list, j} = buildBoneList(pose, P, palette, facing, originWorld);
+  const {list, j, joints} = buildBoneList(pose, P, palette, facing, originWorld);
   const withDepth = list.map(seg=>{
     const da = projectIso(seg.a).depth, db = projectIso(seg.b).depth;
-    return {...seg, depth:(da+db)/2};
+    return {...seg, depth:(da+db)/2, isJoint:false};
+  });
+  joints.forEach(jt=>{
+    withDepth.push({...jt, depth:projectIso(jt.pos).depth, isJoint:true});
   });
   withDepth.sort((s1,s2)=>s1.depth - s2.depth);
   // insert head (as a circle) at appropriate slot by depth
@@ -557,9 +707,13 @@ function drawHumanoid(pose, P, palette, facing, originWorld){
   let inserted=false;
   for (let i=0;i<withDepth.length;i++){
     const seg = withDepth[i];
-    if (seg.glow){ ctx.save(); ctx.shadowColor = seg.glowColor||seg.c; ctx.shadowBlur = 9*DPR; }
-    drawCapsule(seg.a, seg.b, seg.r, seg.c);
-    if (seg.glow){ ctx.restore(); }
+    if (seg.isJoint){
+      drawJoint(seg.pos, seg.r, seg.c);
+    } else {
+      if (seg.glow){ ctx.save(); ctx.shadowColor = seg.glowColor||seg.c; ctx.shadowBlur = 9*DPR; }
+      drawCapsule(seg.a, seg.b, seg.r, seg.c);
+      if (seg.glow){ ctx.restore(); }
+    }
     if (!inserted && headDepth <= seg.depth){
       drawHead(j.headC, P, palette, facing); inserted=true;
     }
@@ -598,10 +752,15 @@ function drawEyes(s, r, fdir, px, py, color, forward){
 }
 function drawHead(headWorld, P, palette, facing){
   const s = projectIso(headWorld);
-  const r = Math.max(2, P.headR*cam.scale*DPR);
+  const r = Math.max(2, P.headR*cam.scale*DPR*(s.scaleMul!=null?s.scaleMul:1));
   facing = facing||0;
   const fdir = screenForwardDir(headWorld, facing);
   const px = -fdir.y, py = fdir.x; // on-screen "left/right of face" axis
+  // slightly narrower + noticeably taller than a perfect circle -- a plain circle read as too
+  // round/flat. Applied as a local transform around the head center so every existing arc/
+  // ellipse/rect call below (all written assuming a circular head) gets uniformly elongated.
+  const HEAD_SX = 0.90, HEAD_SY = 1.22;
+  ctx.save(); ctx.translate(s.x, s.y); ctx.scale(HEAD_SX, HEAD_SY); ctx.translate(-s.x, -s.y);
 
   if (!palette.helmColor){
     // no headwear: plain head (used by bald/skeletal enemies) -- eyes still track facing
@@ -610,6 +769,7 @@ function drawHead(headWorld, P, palette, facing){
     g.addColorStop(1, palette.skin);
     ctx.fillStyle=g; ctx.beginPath(); ctx.arc(s.x,s.y,r,0,Math.PI*2); ctx.fill();
     if (palette.eyeGlow) drawEyes(s, r, fdir, px, py, palette.eyeGlow, 0.30);
+    ctx.restore();
     return;
   }
 
@@ -677,6 +837,7 @@ function drawHead(headWorld, P, palette, facing){
 
   const eyeColor = palette.eyeGlow || (metal ? '#bcd6ff' : null);
   if (eyeColor) drawEyes(s, r, fdir, px, py, eyeColor, 0.34);
+  ctx.restore();
 }
 function drawShadow(pos, radiusM, alpha){
   const s = projectIso({x:pos.x,y:0,z:pos.z});
@@ -687,7 +848,7 @@ function drawShadow(pos, radiusM, alpha){
 
 // ============================================================ ENVIRONMENT =
 let ARENA_R = 18;
-let pillars = [], torches = [], decorations = [];
+let pillars = [], torches = [], decorations = [], ponds = [], meadowPatches = [], wallBlocks = [], floorTiles = [];
 function scatterPoint(minR, maxR, avoidPoints, avoidDist){
   for (let tries=0; tries<15; tries++){
     const a = Math.random()*Math.PI*2, r = minR + Math.random()*(maxR-minR);
@@ -724,8 +885,51 @@ function makeGrassBlades(scale){
 }
 const GRASS_GREENS = ['#3f6b32','#4a7a3a','#356428'];
 const FLOWER_COLORS = ['#ff6a8a','#ffd23c','#b06aff','#f2f2f2','#ff9a4a'];
-function buildArena(){
-  pillars = []; torches = []; decorations = [];
+
+// ------------------------------------------------------- per-floor biomes --
+// Each floor picks a biome that reskins ground tint, grass/decoration mix, pond count,
+// and (for snow) adds falling weather -- so descending never looks like the same room twice.
+const BIOMES = ['meadow','marsh','snow','lake','forest'];
+const BIOME_LABELS = {meadow:'草原', marsh:'湿原', snow:'雪原', lake:'湖畔', forest:'森林'};
+const BIOME_GRASS = {
+  meadow: ['#3f6b32','#4a7a3a','#356428'],
+  marsh:  ['#4a5a2c','#3e4a24','#5a6a34'],
+  snow:   ['#d8e6ea','#c4d6dc','#eef6f8'],
+  lake:   ['#3f6b32','#4a7a3a','#356428'],
+  forest: ['#274a20','#1f3d1a','#325c28'],
+};
+const BIOME_FLOWERS = {
+  meadow: ['#ff6a8a','#ffd23c','#b06aff','#f2f2f2','#ff9a4a'],
+  marsh:  ['#c9a44a','#8a9a5a'],
+  snow:   ['#bfe0ff'],
+  lake:   ['#ff6a8a','#ffd23c','#b06aff','#f2f2f2'],
+  forest: ['#e8d24a','#f2f2f2'],
+};
+const BIOME_MEADOW_TINT = {
+  meadow: 'rgba(70,120,50,ALPHA)',
+  marsh:  'rgba(80,86,40,ALPHA)',
+  snow:   'rgba(220,235,245,ALPHA)',
+  lake:   'rgba(60,110,90,ALPHA)',
+  forest: 'rgba(30,60,26,ALPHA)',
+};
+const BIOME_TILE_BASE = {
+  meadow: {r:8, g:3, b:-5, add:0},
+  marsh:  {r:-6, g:2, b:-14, add:-4},
+  snow:   {r:34, g:38, b:44, add:26},
+  lake:   {r:-4, g:6, b:10, add:-2},
+  forest: {r:-10, g:0, b:-10, add:-8},
+};
+function pickBiome(floor){
+  return floor<=1 ? 'meadow' : BIOMES[Math.floor(Math.random()*BIOMES.length)];
+}
+function buildArena(biomeOverride){
+  pillars = []; torches = []; decorations = []; ponds = []; wallBlocks = [];
+  // biomeOverride lets the very first, module-load-time call (before `world` exists yet) avoid
+  // touching `world` at all -- short-circuits past it entirely thanks to `||` short-circuiting.
+  const biome = biomeOverride || (world.biome || 'meadow');
+  const grassPalette = BIOME_GRASS[biome] || GRASS_GREENS;
+  const flowerPalette = BIOME_FLOWERS[biome] || FLOWER_COLORS;
+  const flowerChance = biome==='snow' ? 0.06 : biome==='marsh' ? 0.14 : biome==='forest' ? 0.16 : 0.30;
   const count = Math.max(7, Math.round(ARENA_R*0.62));
   for (let i=0;i<count;i++){
     const a = i/count*Math.PI*2 + 0.35;
@@ -733,27 +937,102 @@ function buildArena(){
     pillars.push(p);
     if (i%2===0) torches.push({x:p.x*0.94, z:p.z*0.94, seed:Math.random()*100});
   }
-  const rockCount = Math.round(ARENA_R*1.1);
+
+  // a low crenellated wall ring around the whole arena -- backdrop "castle courtyard" feel
+  const wallCount = count*2;
+  const wallR = ARENA_R*1.16;
+  for (let i=0;i<wallCount;i++){
+    const a = i/wallCount*Math.PI*2;
+    wallBlocks.push({
+      x:Math.cos(a)*wallR, z:Math.sin(a)*wallR,
+      merlon: i%2===0,
+      shade: 0.85+Math.random()*0.3,
+    });
+  }
+
+  buildFloorTiles();
+
+  // ponds first, so rocks/grass placement below can avoid overlapping the water
+  let pondCount = ARENA_R > 20 ? 2 : 1;
+  if (biome==='lake') pondCount += 2;
+  else if (biome==='marsh') pondCount += 1;
+  else if (biome==='snow') pondCount = Math.max(0, pondCount-1);
+  const avoidForPonds = pillars.concat([{x:0,z:2.5}]); // keep clear of pillars + player spawn
+  for (let i=0;i<pondCount;i++){
+    const p = scatterPoint(4.5, ARENA_R*0.75, avoidForPonds.concat(ponds.map(pd=>({x:pd.x,z:pd.z}))), 6.5);
+    const r = (1.6+Math.random()*1.1) * (0.85+ARENA_R/40);
+    ponds.push({x:p.x, z:p.z, r, seed:Math.random()*100});
+  }
+  const pondAvoid = ponds.map(p=>({x:p.x, z:p.z}));
+
+  const rockCount = Math.round(ARENA_R*1.1) * (biome==='snow' ? 1.3 : 1);
   for (let i=0;i<rockCount;i++){
-    const p = scatterPoint(2.6, ARENA_R*0.93, pillars, 1.6);
+    const p = scatterPoint(2.6, ARENA_R*0.93, pillars.concat(pondAvoid), 1.6);
+    if (ponds.some(pd=>Math.hypot(p.x-pd.x,p.z-pd.z) < pd.r+0.9)) continue;
     const scale = 0.6+Math.random()*0.9;
     const {blobs, maxR} = makeRockBlobs(scale);
-    decorations.push({type:'rock', x:p.x, z:p.z, blobs, maxR});
+    decorations.push({type:'rock', x:p.x, z:p.z, blobs, maxR, snowCap: biome==='snow'});
   }
-  const grassCount = Math.round(ARENA_R*2.6);
+
+  // trees for the forest biome -- reuses the rock scatter-and-avoid pattern with a much
+  // bigger avoidance radius (trees need breathing room) and its own capsule-trunk+blob-canopy draw.
+  if (biome==='forest'){
+    const treeCount = Math.round(ARENA_R*0.55);
+    const treeAvoid = pillars.concat(pondAvoid);
+    for (let i=0;i<treeCount;i++){
+      const p = scatterPoint(2.8, ARENA_R*0.92, treeAvoid, 2.4);
+      if (ponds.some(pd=>Math.hypot(p.x-pd.x,p.z-pd.z) < pd.r+1.3)) continue;
+      treeAvoid.push(p);
+      const scale = 0.85+Math.random()*0.9;
+      decorations.push({type:'tree', x:p.x, z:p.z, scale, canopyColor: grassPalette[Math.floor(Math.random()*grassPalette.length)]});
+    }
+  }
+
+  // grass now scales with the arena's AREA (not just radius) so the whole floor reads as a
+  // meadow instead of scattered tufts -- capped for performance on the largest (deep-floor) arenas.
+  // density and palette both follow the floor's biome (snow/marsh get sparser or muddier cover).
+  const densityMul = biome==='snow' ? 0.35 : biome==='marsh' ? 0.8 : 1;
+  const grassCount = Math.min(340, Math.round(ARENA_R*ARENA_R*0.42*densityMul));
   for (let i=0;i<grassCount;i++){
-    const p = scatterPoint(2.0, ARENA_R*0.96, pillars, 1.1);
-    const scale = 0.7+Math.random()*0.8;
+    const p = scatterPoint(1.6, ARENA_R*0.97, pillars.concat(pondAvoid), 0.85);
+    if (ponds.some(pd=>Math.hypot(p.x-pd.x,p.z-pd.z) < pd.r+0.6)) continue;
+    const scale = 0.65+Math.random()*0.85;
     decorations.push({
       type:'grass', x:p.x, z:p.z, scale,
       blades: makeGrassBlades(scale),
-      grassColor: GRASS_GREENS[Math.floor(Math.random()*GRASS_GREENS.length)],
-      flower: Math.random()<0.32,
-      flowerColor: FLOWER_COLORS[Math.floor(Math.random()*FLOWER_COLORS.length)],
+      grassColor: grassPalette[Math.floor(Math.random()*grassPalette.length)],
+      flower: Math.random()<flowerChance,
+      flowerColor: flowerPalette[Math.floor(Math.random()*flowerPalette.length)],
     });
   }
+  // a few reeds/blades right at the water's edge for a natural pond shoreline (heavier in marshes)
+  for (const pd of ponds){
+    const reeds = (biome==='marsh' ? 18 : 10)+Math.floor(Math.random()*6);
+    for (let i=0;i<reeds;i++){
+      const a = Math.random()*Math.PI*2;
+      const rr = pd.r*(1.02+Math.random()*0.22);
+      const scale = 0.6+Math.random()*0.5;
+      decorations.push({
+        type:'grass', x:pd.x+Math.cos(a)*rr, z:pd.z+Math.sin(a)*rr, scale,
+        blades: makeGrassBlades(scale),
+        grassColor: grassPalette[Math.floor(Math.random()*grassPalette.length)],
+        flower: Math.random()<flowerChance*0.6,
+        flowerColor: flowerPalette[Math.floor(Math.random()*flowerPalette.length)],
+      });
+    }
+  }
+
+  // soft ground-tint patches so the whole floor reads as a meadow even between individual
+  // grass tufts, rather than bare dirt with sparse clumps. Tint color follows the biome.
+  meadowPatches = [];
+  const patchCount = Math.round(ARENA_R*0.9);
+  const tintTemplate = BIOME_MEADOW_TINT[biome] || BIOME_MEADOW_TINT.meadow;
+  for (let i=0;i<patchCount;i++){
+    const a = Math.random()*Math.PI*2, r = Math.random()*ARENA_R*0.92;
+    meadowPatches.push({x:Math.cos(a)*r, z:Math.sin(a)*r, rad:2.2+Math.random()*3.4, alpha:0.10+Math.random()*0.16, tint:tintTemplate});
+  }
 }
-buildArena();
+buildArena('meadow');
 function drawRock(dec){
   drawShadow({x:dec.x,z:dec.z}, 0.45*dec.maxR, 0.25);
   for (const b of dec.blobs){
@@ -763,6 +1042,29 @@ function drawRock(dec){
     const g = ctx.createRadialGradient(s.x-rx*0.3,s.y-ry*0.35,rx*0.1, s.x,s.y,rx*1.2);
     g.addColorStop(0,'#8a8574'); g.addColorStop(0.55,'#5e5a4c'); g.addColorStop(1,'#332f26');
     ctx.fillStyle=g;
+    ctx.beginPath(); ctx.ellipse(s.x,s.y,rx,ry,0,0,Math.PI*2); ctx.fill();
+    if (dec.snowCap){
+      // dust of snow sitting on the rock's upper face -- cheap way to make the snow biome's
+      // rocks read as "snow-covered" without a separate rock model
+      ctx.fillStyle = 'rgba(235,245,250,0.75)';
+      ctx.beginPath(); ctx.ellipse(s.x, s.y-ry*0.35, rx*0.62, ry*0.34, 0,0,Math.PI*2); ctx.fill();
+    }
+  }
+}
+function drawTree(dec){
+  const scale = dec.scale;
+  const trunkH = 1.5*scale, trunkR = 0.09*scale;
+  drawShadow({x:dec.x,z:dec.z}, 0.62*scale, 0.3);
+  const base = {x:dec.x,y:0,z:dec.z}, top = {x:dec.x,y:trunkH,z:dec.z};
+  drawCapsule(base, top, trunkR, '#4a3320');
+  // three overlapping canopy blobs stacked up the trunk for a fuller silhouette than one circle
+  const canopyOffsets = [{dy:trunkH*0.75,dx:-0.28*scale,r:0.62*scale},{dy:trunkH*0.95,dx:0.30*scale,r:0.58*scale},{dy:trunkH*1.25,dx:0.02*scale,r:0.52*scale}];
+  for (const co of canopyOffsets){
+    const s = projectIso({x:dec.x+co.dx, y:co.dy, z:dec.z});
+    const rx = co.r*cam.scale*DPR, ry = rx*0.82;
+    const g = ctx.createRadialGradient(s.x-rx*0.25,s.y-ry*0.3,rx*0.1, s.x,s.y,rx*1.1);
+    g.addColorStop(0, shadeColor(dec.canopyColor,0.25)); g.addColorStop(0.6, dec.canopyColor); g.addColorStop(1, shadeColor(dec.canopyColor,-0.4));
+    ctx.fillStyle = g;
     ctx.beginPath(); ctx.ellipse(s.x,s.y,rx,ry,0,0,Math.PI*2); ctx.fill();
   }
 }
@@ -782,7 +1084,9 @@ function drawGrassFlower(dec){
   }
 }
 function drawDecoration(dec){
-  if (dec.type==='rock') drawRock(dec); else drawGrassFlower(dec);
+  if (dec.type==='rock') drawRock(dec);
+  else if (dec.type==='tree') drawTree(dec);
+  else drawGrassFlower(dec);
 }
 
 function drawBackground(){
@@ -792,6 +1096,19 @@ function drawBackground(){
   ctx.fillStyle=g; ctx.fillRect(0,0,canvas.width,canvas.height);
 }
 
+// Procedural flagstone floor: a fixed grid of slightly-irregular stone blocks (rebuilt once
+// per buildArena) instead of a plain grid of thin lines -- much closer to a real dungeon floor.
+function buildFloorTiles(){
+  floorTiles = [];
+  const step = 1.7;
+  for (let gx=-ARENA_R; gx<ARENA_R; gx+=step){
+    for (let gz=-ARENA_R; gz<ARENA_R; gz+=step){
+      const cx=gx+step/2, cz=gz+step/2;
+      if (Math.hypot(cx,cz) > ARENA_R-0.25) continue;
+      floorTiles.push({x0:gx, z0:gz, x1:gx+step*0.96, z1:gz+step*0.96, shade:Math.random()});
+    }
+  }
+}
 function drawFloor(t){
   const N=64; ctx.save();
   ctx.beginPath();
@@ -806,18 +1123,61 @@ function drawFloor(t){
   fg.addColorStop(0,'#3a332c'); fg.addColorStop(0.6,'#26211d'); fg.addColorStop(1,'#120f0d');
   ctx.fillStyle = fg; ctx.fill();
   ctx.clip();
-  ctx.strokeStyle='rgba(0,0,0,0.35)'; ctx.lineWidth=Math.max(1,1*DPR);
-  const step=1.2, R=ARENA_R;
-  for (let gx=-R; gx<=R; gx+=step){
-    const p1=projectIso({x:gx,y:0,z:-R}), p2=projectIso({x:gx,y:0,z:R});
-    ctx.beginPath(); ctx.moveTo(p1.x,p1.y); ctx.lineTo(p2.x,p2.y); ctx.stroke();
+  for (const tl of floorTiles){
+    const p1=projectIso({x:tl.x0,y:0,z:tl.z0});
+    const p2=projectIso({x:tl.x1,y:0,z:tl.z0});
+    const p3=projectIso({x:tl.x1,y:0,z:tl.z1});
+    const p4=projectIso({x:tl.x0,y:0,z:tl.z1});
+    const base = 36 + tl.shade*26;
+    const tb = BIOME_TILE_BASE[world.biome] || BIOME_TILE_BASE.meadow;
+    ctx.fillStyle = `rgb(${Math.round(base+8+tb.r)},${Math.round(base+3+tb.g+tb.add*0.3)},${Math.round(base-5+tb.b+tb.add*0.3)})`;
+    ctx.beginPath(); ctx.moveTo(p1.x,p1.y); ctx.lineTo(p2.x,p2.y); ctx.lineTo(p3.x,p3.y); ctx.lineTo(p4.x,p4.y); ctx.closePath();
+    ctx.fill();
+    ctx.strokeStyle='rgba(0,0,0,0.42)'; ctx.lineWidth=Math.max(1,1*DPR); ctx.stroke();
   }
-  for (let gz=-R; gz<=R; gz+=step){
-    const p1=projectIso({x:-R,y:0,z:gz}), p2=projectIso({x:R,y:0,z:gz});
-    ctx.beginPath(); ctx.moveTo(p1.x,p1.y); ctx.lineTo(p2.x,p2.y); ctx.stroke();
+  // soft green meadow tint, clipped to the arena floor shape above -- makes the whole
+  // ground read as overgrown grass rather than bare stone between individual grass tufts.
+  for (const mp of meadowPatches){
+    const s = projectIso({x:mp.x,y:0.02,z:mp.z});
+    const rad = mp.rad*cam.scale*DPR;
+    const mg = ctx.createRadialGradient(s.x,s.y,0, s.x,s.y,rad);
+    const tint = mp.tint || 'rgba(70,120,50,ALPHA)';
+    mg.addColorStop(0, tint.replace('ALPHA', mp.alpha));
+    mg.addColorStop(1, tint.replace('ALPHA','0'));
+    ctx.fillStyle = mg;
+    ctx.beginPath(); ctx.arc(s.x,s.y,rad,0,Math.PI*2); ctx.fill();
   }
-  // subtle cracks
   ctx.restore();
+}
+function drawPonds(t){
+  for (const pd of ponds){
+    const s = projectIso({x:pd.x, y:0.015, z:pd.z});
+    const rx = pd.r*cam.scale*DPR, ry = rx*0.55;
+    ctx.fillStyle = 'rgba(40,34,24,0.5)';
+    ctx.beginPath(); ctx.ellipse(s.x,s.y, rx*1.14, ry*1.14, 0,0,Math.PI*2); ctx.fill();
+    const wg = ctx.createRadialGradient(s.x-rx*0.25,s.y-ry*0.3,rx*0.08, s.x,s.y, rx);
+    if (world.biome === 'marsh'){
+      wg.addColorStop(0, '#6a7a3a'); wg.addColorStop(0.5, '#3c4a20'); wg.addColorStop(1, '#1c2410');
+    } else if (world.biome === 'snow'){
+      wg.addColorStop(0, '#bfe8f0'); wg.addColorStop(0.5, '#3a7a90'); wg.addColorStop(1, '#0c3140');
+    } else {
+      wg.addColorStop(0, '#5fb4c9'); wg.addColorStop(0.5, '#1f6b82'); wg.addColorStop(1, '#0c3140');
+    }
+    ctx.fillStyle = wg;
+    ctx.beginPath(); ctx.ellipse(s.x,s.y, rx, ry, 0,0,Math.PI*2); ctx.fill();
+    ctx.save();
+    ctx.beginPath(); ctx.ellipse(s.x,s.y, rx, ry, 0,0,Math.PI*2); ctx.clip();
+    for (let k=0;k<3;k++){
+      const phase = (t*0.35 + pd.seed*0.1 + k/3) % 1;
+      const rr = phase*rx*1.3;
+      ctx.strokeStyle = `rgba(210,240,250,${0.28*(1-phase)})`;
+      ctx.lineWidth = Math.max(1, 1.4*DPR);
+      ctx.beginPath(); ctx.ellipse(s.x,s.y, rr, rr*0.55, 0,0,Math.PI*2); ctx.stroke();
+    }
+    ctx.fillStyle = `rgba(255,255,255,${0.18+0.06*Math.sin(t*2+pd.seed)})`;
+    ctx.beginPath(); ctx.ellipse(s.x-rx*0.2, s.y-ry*0.25, rx*0.35, ry*0.12, -0.3, 0, Math.PI*2); ctx.fill();
+    ctx.restore();
+  }
 }
 
 function drawTorchGlow(t){
@@ -835,10 +1195,44 @@ function drawTorchGlow(t){
 }
 function drawPillar(p){
   const base={x:p.x,y:0,z:p.z}, top={x:p.x,y:3.0,z:p.z};
-  drawShadow(p, 0.9, 0.35);
+  drawShadow(p, 1.0, 0.35);
+  // plinth (flat base block the shaft sits on)
+  const baseS = projectIso({x:p.x,y:0.14,z:p.z});
+  ctx.fillStyle = '#38332b';
+  ctx.beginPath(); ctx.ellipse(baseS.x,baseS.y, 0.62*cam.scale*DPR, 0.34*cam.scale*DPR, 0,0,Math.PI*2); ctx.fill();
+  ctx.strokeStyle='rgba(0,0,0,0.4)'; ctx.lineWidth=Math.max(1,1.3*DPR); ctx.stroke();
+
   drawCapsule(base, top, 0.42, '#4a433c');
+  // carved fluting lines down the shaft for a "worked stone column" look
+  ctx.strokeStyle='rgba(0,0,0,0.25)'; ctx.lineWidth=Math.max(1,2*DPR);
+  for (const off of [-0.13, 0.13]){
+    const a = projectIso({x:p.x+off, y:0.3, z:p.z});
+    const b = projectIso({x:p.x+off, y:2.75, z:p.z});
+    ctx.beginPath(); ctx.moveTo(a.x,a.y); ctx.lineTo(b.x,b.y); ctx.stroke();
+  }
+  // necking / capital molding
+  const neckS = projectIso({x:p.x,y:2.72,z:p.z});
+  ctx.fillStyle = '#5c534a';
+  ctx.beginPath(); ctx.ellipse(neckS.x,neckS.y, 0.50*cam.scale*DPR, 0.27*cam.scale*DPR, 0,0,Math.PI*2); ctx.fill();
   const capTop = projectIso({x:p.x,y:3.15,z:p.z});
-  ctx.fillStyle='#5c534a'; ctx.beginPath(); ctx.ellipse(capTop.x,capTop.y, 0.55*cam.scale*DPR,0.30*cam.scale*DPR,0,0,Math.PI*2); ctx.fill();
+  const cg = ctx.createRadialGradient(capTop.x-8*DPR,capTop.y-6*DPR,4*DPR, capTop.x,capTop.y,0.62*cam.scale*DPR);
+  cg.addColorStop(0,'#867c6e'); cg.addColorStop(1,'#463f36');
+  ctx.fillStyle=cg;
+  ctx.beginPath(); ctx.ellipse(capTop.x,capTop.y, 0.60*cam.scale*DPR,0.32*cam.scale*DPR,0,0,Math.PI*2); ctx.fill();
+  ctx.strokeStyle='rgba(0,0,0,0.4)'; ctx.lineWidth=Math.max(1,1.2*DPR); ctx.stroke();
+}
+function drawWallBlock(wb){
+  const h = wb.merlon ? 4.4 : 2.4;
+  const s = wb.shade;
+  drawShadow({x:wb.x,z:wb.z}, 0.75, 0.28);
+  drawCapsule({x:wb.x,y:0,z:wb.z}, {x:wb.x,y:h,z:wb.z}, 0.5,
+    `rgb(${Math.round(58*s)},${Math.round(52*s)},${Math.round(45*s)})`);
+  if (wb.merlon){
+    const topS = projectIso({x:wb.x,y:h+0.15,z:wb.z});
+    ctx.fillStyle = `rgb(${Math.round(70*s)},${Math.round(63*s)},${Math.round(54*s)})`;
+    ctx.beginPath(); ctx.ellipse(topS.x,topS.y, 0.55*cam.scale*DPR,0.30*cam.scale*DPR,0,0,Math.PI*2); ctx.fill();
+    ctx.strokeStyle='rgba(0,0,0,0.4)'; ctx.lineWidth=Math.max(1,1.2*DPR); ctx.stroke();
+  }
 }
 function drawTorchStick(tr){
   drawCapsule({x:tr.x,y:0.9,z:tr.z},{x:tr.x,y:1.5,z:tr.z}, 0.05, '#2a1c10');
@@ -885,6 +1279,35 @@ function updateDrawDust(dt){
     const s = projectIso({x:d.x,y:d.y,z:d.z});
     ctx.fillStyle = `rgba(220,210,190,${d.alpha})`;
     ctx.beginPath(); ctx.arc(s.x,s.y,d.size*DPR,0,Math.PI*2); ctx.fill();
+  }
+  ctx.restore();
+}
+
+// screen-space falling snow, only active while the current floor's biome is 'snow' -- kept
+// purely in screen coordinates (not world space) so it doesn't need to track the camera at all.
+let snowFlakes = null;
+function ensureSnowFlakes(){
+  if (snowFlakes) return;
+  snowFlakes = [];
+  for (let i=0;i<70;i++){
+    snowFlakes.push({
+      x:Math.random()*1280, y:Math.random()*720,
+      vy:18+Math.random()*26, vx:-8+Math.random()*16,
+      size:1.2+Math.random()*2.2, alpha:0.35+Math.random()*0.4, sway:Math.random()*Math.PI*2,
+    });
+  }
+}
+function updateDrawSnow(dt){
+  ensureSnowFlakes();
+  const w = canvas.width, h = canvas.height;
+  ctx.save();
+  for (const f of snowFlakes){
+    f.sway += dt*1.4;
+    f.y += f.vy*dt*DPR; f.x += (f.vx+Math.sin(f.sway)*10)*dt*DPR;
+    if (f.y > h){ f.y = -4; f.x = Math.random()*w; }
+    if (f.x > w) f.x -= w; if (f.x < 0) f.x += w;
+    ctx.fillStyle = `rgba(255,255,255,${f.alpha})`;
+    ctx.beginPath(); ctx.arc(f.x, f.y, f.size*DPR, 0, Math.PI*2); ctx.fill();
   }
   ctx.restore();
 }
@@ -947,6 +1370,62 @@ const arrows = [];
 function spawnArrow(x,z,dx,dz,speed,dmg,hitColor,fromPlayer,heavy,fire){
   arrows.push({x, y: fire?0.9:1.15, z, dx, dz, speed, dmg, hitColor, fromPlayer, heavy, fire,
                life:0, maxLife: fire?1.6:3.0, pierced: new Set()});
+}
+
+// ------------------------------------------------------- wide fire-wave burst --
+// Legendary/fireBolt melee weapons used to fire a single narrow bolt straight ahead. That read
+// as "a thin line", not "a powerful weapon's light". This instead resolves as an instant,
+// one-shot hit-check across a wide frontal cone (all targets in range+angle get hit the moment
+// the swing connects), paired with a wide expanding fan-shaped flash for the visual -- so the
+// light reads as a single wide burst that covers a lot of ground at once, not a travelling dot.
+const fireWaves = [];
+function spawnFireWave(px, pz, facing, dmg, color, heavy){
+  const range = 7.2 * (heavy ? 1.3 : 1.0);
+  const halfAngle = (heavy ? 64 : 48) * Math.PI/180;
+  const fx=Math.sin(facing), fz=-Math.cos(facing);
+  let hitAny = false;
+  for (const e of world.enemies){
+    if (e.dead) continue;
+    const dx=e.pos.x-px, dz=e.pos.z-pz;
+    const dist = Math.hypot(dx,dz);
+    if (dist > range || dist < 0.001) continue;
+    const nd = {x:dx/dist, z:dz/dist};
+    const dot = clamp(fx*nd.x + fz*nd.z, -1, 1);
+    if (Math.acos(dot) > halfAngle) continue;
+    e.takeDamage(dmg, true);
+    hitAny = true;
+    spawnBurst({x:e.pos.x,y:1.2,z:e.pos.z}, color, heavy?16:10, heavy?3.0:2.0);
+  }
+  fireWaves.push({x:px, z:pz, facing, range, halfAngle, color, life:0, maxLife:0.4, heavy});
+  return hitAny;
+}
+function updateDrawFireWaves(dt){
+  if (!fireWaves.length) return;
+  ctx.save(); ctx.globalCompositeOperation='lighter';
+  for (let i=fireWaves.length-1; i>=0; i--){
+    const w = fireWaves[i];
+    w.life += dt;
+    const t = clamp(w.life/w.maxLife, 0, 1);
+    if (t>=1){ fireWaves.splice(i,1); continue; }
+    const growR = w.range * Math.min(1, t*1.8); // punches out fast, then just fades in place
+    const fadeAlpha = (1-t)*0.85;
+    const N = 20;
+    const origin = projectIso({x:w.x, y:0.55, z:w.z});
+    ctx.beginPath();
+    ctx.moveTo(origin.x, origin.y);
+    for (let k=0; k<=N; k++){
+      const a = w.facing - w.halfAngle + (2*w.halfAngle)*(k/N);
+      const p = projectIso({x:w.x+Math.sin(a)*growR, y:0.55, z:w.z-Math.cos(a)*growR});
+      ctx.lineTo(p.x, p.y);
+    }
+    ctx.closePath();
+    ctx.fillStyle = w.color.replace('ALPHA', (fadeAlpha*0.35).toFixed(2));
+    ctx.fill();
+    ctx.strokeStyle = w.color.replace('ALPHA', fadeAlpha.toFixed(2));
+    ctx.lineWidth = Math.max(1.5, 3*DPR);
+    ctx.stroke();
+  }
+  ctx.restore();
 }
 function updateDrawArrows(dt){
   for (let i=arrows.length-1; i>=0; i--){
@@ -1021,16 +1500,145 @@ function updateDrawAuraStreaks(dt){
   ctx.restore();
 }
 
+// ------------------------------------------------------- melee slash trail --
+// A short-lived glowing arc tracing the blade's horizontal sweep, spawned once per melee
+// hit-frame -- makes the Zelda-style side-swing read clearly as a wide cutting arc.
+const slashTrails = [];
+function spawnSlashArc(px, pz, facing, color, big){
+  big = big||1;
+  const R = 0.92*big, Y = 0.95;
+  const fromA = facing + 1.05;          // windup side (character's right/back)
+  const toA   = facing - 1.30*big;      // follow-through side (left)
+  const N = 10, pts = [];
+  for (let i=0;i<=N;i++){
+    const a = fromA + (toA-fromA)*(i/N);
+    pts.push({x:px+Math.sin(a)*R, y:Y, z:pz-Math.cos(a)*R});
+  }
+  slashTrails.push({pts, life:0.20, maxLife:0.20, color});
+}
+function updateDrawSlashTrails(dt){
+  if (!slashTrails.length) return;
+  ctx.save(); ctx.globalCompositeOperation='lighter';
+  for (let i=slashTrails.length-1;i>=0;i--){
+    const s = slashTrails[i];
+    s.life -= dt;
+    if (s.life<=0){ slashTrails.splice(i,1); continue; }
+    const a = clamp(s.life/s.maxLife,0,1);
+    const n = s.pts.length;
+    for (let k=0;k<n-1;k++){
+      const taper = 0.35+0.65*Math.sin((k/(n-1))*Math.PI); // thin at both ends, wide mid-swing
+      drawCapsule(s.pts[k], s.pts[k+1], 0.05*taper, s.color.replace('ALPHA', (a*0.8).toFixed(2)));
+    }
+  }
+  ctx.restore();
+}
+
 function drawHPBar(entity){
   if (entity.hp>=entity.maxHp && entity.dead!==true && entity._neverHit) return;
   const headPos = rotateY(entity.getPose().headC, entity.facing);
   const world = V3.add(headPos, {x:entity.pos.x,y:0.32,z:entity.pos.z});
   const s = projectIso(world);
-  const w = 44*DPR, h=5*DPR;
+  const w = (entity.isBoss ? 96 : 44)*DPR, h=(entity.isBoss?7:5)*DPR;
   const pct = clamp(entity.hp/entity.maxHp,0,1);
+  if (entity.isBoss && entity.name){
+    ctx.fillStyle = '#ff6a5a'; ctx.font = `bold ${11*DPR}px sans-serif`; ctx.textAlign='center';
+    ctx.shadowColor='#000'; ctx.shadowBlur=4*DPR;
+    ctx.fillText(entity.name, s.x, s.y-h/2-6*DPR);
+    ctx.shadowBlur=0; ctx.textAlign='left';
+  }
   ctx.fillStyle='rgba(0,0,0,0.55)'; ctx.fillRect(s.x-w/2-1,s.y-h/2-1,w+2,h+2);
-  ctx.fillStyle = entity.isPlayer? '#5ac25a' : '#c23c3c';
+  ctx.fillStyle = entity.isPlayer? '#5ac25a' : (entity.isBoss ? '#ff8a3a' : '#c23c3c');
   ctx.fillRect(s.x-w/2, s.y-h/2, w*pct, h);
+}
+
+// ------------------------------------------------------- player murmur lines --
+// Periodically the player mutters a short, slightly ominous flavor line above their own
+// head (a small bit of "atmosphere" for the TGS booth demo), occasionally namedropping a
+// shop item they don't own yet as a soft, in-fiction upsell nudge.
+const MURMUR_LINES = [
+  '……あの扉の奥に、何かいる気がする。',
+  'この地下、一体どこまで続いているんだ……。',
+  '剣が疼く……まだ何か眠っているのか。',
+  '誰かに見られている気がする……気のせいか？',
+  'この静けさ、逆に不気味だな。',
+  '早く戻らないと……あいつが待っている。',
+  'かすかに血の匂いがする。近くに何かいるな。',
+  '本当にこの先に「アレ」があるのか……？',
+  'この鎧、まだ本調子じゃない気がする。',
+  '……足音。俺以外の、誰かの。',
+];
+function pickUnownedItem(player){
+  const cats = ['weapon','armor','shield','helmet','mount'];
+  const candidates = [];
+  for (const cat of cats){
+    for (const it of ITEM_SETS[cat]){
+      if (it.price>0 && !player.owned[cat].has(it.id)) candidates.push(it);
+    }
+  }
+  if (!candidates.length) return null;
+  return candidates[Math.floor(Math.random()*candidates.length)];
+}
+function pickMurmur(player){
+  if (Math.random() < 0.35){
+    const it = pickUnownedItem(player);
+    if (it) return it.name+'をSHOPで購入しようか……';
+  }
+  return MURMUR_LINES[Math.floor(Math.random()*MURMUR_LINES.length)];
+}
+function drawSpeechBubble(entity){
+  if (!entity.murmurText || !entity.murmurLife || entity.murmurLife<=0) return;
+  const headPos = rotateY(entity.getPose().headC, entity.facing);
+  const worldPos = V3.add(headPos, {x:entity.pos.x, y:0.62, z:entity.pos.z});
+  const s = projectIso(worldPos);
+  const lifeFrac = clamp(entity.murmurLife/entity.murmurLifeMax, 0, 1);
+  const fadeIn = clamp((entity.murmurLifeMax-entity.murmurLife)/0.3, 0, 1);
+  const alpha = Math.min(lifeFrac, fadeIn);
+  if (alpha<=0) return;
+  const text = entity.murmurText;
+  const fontPx = 12.5*DPR;
+  const fontStr = fontPx+'px sans-serif';
+  ctx.font = fontStr;
+  // real canvases give an accurate width via measureText; fall back to a generous per-char
+  // estimate (tuned for full-width Japanese glyphs, not narrow Latin ones) if it's unavailable.
+  let textW = null;
+  try {
+    const m = ctx.measureText(text);
+    if (m && typeof m.width === 'number' && m.width > 0) textW = m.width;
+  } catch(e){ /* ignore */ }
+  if (!textW) textW = text.length*fontPx*1.05;
+  const padX = 12*DPR, padY = 9*DPR;
+  const w = textW+padX*2, h = fontPx+padY*2;
+  const bx = s.x, by = s.y - 40*DPR;
+  const rx = bx-w/2, ry = by-h, rw=w, rh=h, rad=7*DPR;
+  ctx.save();
+  ctx.globalAlpha = alpha;
+  ctx.fillStyle = 'rgba(12,20,30,0.85)';
+  ctx.strokeStyle = 'rgba(110,190,255,0.55)';
+  ctx.lineWidth = 1.3*DPR;
+  ctx.beginPath();
+  ctx.moveTo(rx+rad, ry);
+  ctx.lineTo(rx+rw-rad, ry);
+  ctx.quadraticCurveTo(rx+rw, ry, rx+rw, ry+rad);
+  ctx.lineTo(rx+rw, ry+rh-rad);
+  ctx.quadraticCurveTo(rx+rw, ry+rh, rx+rw-rad, ry+rh);
+  ctx.lineTo(rx+rad, ry+rh);
+  ctx.quadraticCurveTo(rx, ry+rh, rx, ry+rh-rad);
+  ctx.lineTo(rx, ry+rad);
+  ctx.quadraticCurveTo(rx, ry, rx+rad, ry);
+  ctx.closePath();
+  ctx.fill(); ctx.stroke();
+  ctx.beginPath();
+  ctx.moveTo(bx-6*DPR, ry+rh);
+  ctx.lineTo(bx+6*DPR, ry+rh);
+  ctx.lineTo(bx, ry+rh+8*DPR);
+  ctx.closePath();
+  ctx.fillStyle = 'rgba(12,20,30,0.85)';
+  ctx.fill();
+  ctx.fillStyle = '#dff2ff';
+  ctx.font = fontPx+'px sans-serif';
+  ctx.textAlign = 'center';
+  ctx.fillText(text, bx, by-h/2+fontPx*0.36);
+  ctx.restore();
 }
 
 // ============================================================ ITEMS ======
@@ -1119,12 +1727,25 @@ const HELMETS = [
     color:'#5a1010', trim:'#2a0808', eyeGlow:'#ff5a2a',
     desc:'竜の頭骨を象った伝説の兜。眼窩に業火が宿る。TGS特別価格。', c1:'#2a0808', c2:'#ff5a2a' },
 ];
-const ITEM_SETS = { weapon: WEAPONS, armor: ARMORS, shield: SHIELDS, helmet: HELMETS };
+const MOUNTS = [
+  { id:'none',   name:'徒歩', price:0, speedMult:1.00, size:0,
+    desc:'騎乗せず、自分の足で駆ける。', c1:'#222', c2:'#333' },
+  { id:'pony',   name:'ポニー', price:1200, speedMult:1.22, size:0.85,
+    color:'#7a5230', maneColor:'#3a2818',
+    desc:'小柄で従順なポニー。徒歩より頼れる速さ。', c1:'#4a3218', c2:'#a4784a' },
+  { id:'warhorse', name:'軍馬', price:3200, speedMult:1.45, size:1.0,
+    color:'#4a3222', maneColor:'#1a1210',
+    desc:'鍛え上げられた軍馬。安定した速度と迫力の走り。', c1:'#2a1c14', c2:'#7a5a3a' },
+  { id:'nightmare', name:'ナイトメア', price:68000, speedMult:1.85, size:1.08, legendary:true, glow:true,
+    color:'#241018', maneColor:'#ff5a2a', eyeGlow:'#ff5a2a',
+    desc:'冥府より召喚された漆黒の悪馬。蹄が炎を纏う。TGS特別価格。', c1:'#120810', c2:'#ff5a2a' },
+];
+const ITEM_SETS = { weapon: WEAPONS, armor: ARMORS, shield: SHIELDS, helmet: HELMETS, mount: MOUNTS };
 function getItem(category, id){
   const set = ITEM_SETS[category];
   return (set && set.find(it=>it.id===id)) || set[0];
 }
-const DEFAULT_EQUIPPED = { weapon:'rusty', armor:'cloth', shield:'none', helmet:'hood' };
+const DEFAULT_EQUIPPED = { weapon:'rusty', armor:'cloth', shield:'none', helmet:'hood', mount:'none' };
 
 function loadSave(){
   try {
@@ -1150,6 +1771,54 @@ function writeSave(owned, equipped){
 }
 
 // ============================================================ ENTITIES ====
+// A simple companion mount rendered as a trailing quadruped behind the player when a
+// horse-type item is equipped. Deliberately built from plain capsules (no IK rig) --
+// it only needs to read as "a horse running behind you", not withstand close scrutiny,
+// and this keeps it robust without a browser available to visually debug a rider pose.
+function drawHorse(px, pz, facing, phase, moving, speed01, mp){
+  if (!mp) return;
+  const size = mp.size||1;
+  const color = mp.color||'#4a3222', mane = mp.mane;
+  const fx=Math.sin(facing), fz=-Math.cos(facing);
+  const rx=Math.cos(facing), rz=Math.sin(facing);
+  const bodyLen = 1.05*size, bodyH=0.62*size, legLen=0.62*size, neckLen=0.5*size;
+  drawShadow({x:px,z:pz}, 0.85*size, 0.32);
+  const tail  = {x:px - fx*bodyLen*0.5, y:bodyH, z:pz - fz*bodyLen*0.5};
+  const chest = {x:px + fx*bodyLen*0.5, y:bodyH, z:pz + fz*bodyLen*0.5};
+  drawCapsule(tail, chest, 0.30*size, color);
+  const neckTop = {x:chest.x + fx*neckLen*0.6, y:bodyH+neckLen*0.55, z:chest.z + fz*neckLen*0.6};
+  drawCapsule(chest, neckTop, 0.20*size, color);
+  const headPos = {x:neckTop.x + fx*0.22*size, y:neckTop.y+0.05*size, z:neckTop.z + fz*0.22*size};
+  drawCapsule(neckTop, headPos, 0.15*size, color);
+  if (mane){
+    drawCapsule({x:neckTop.x-fx*0.05, y:neckTop.y+0.10*size, z:neckTop.z-fz*0.05},
+                {x:chest.x-fx*0.05,   y:bodyH+0.20*size,      z:chest.z-fz*0.05}, 0.05*size, mane);
+  }
+  const legAnchorsLocal = [ {along:0.42,side:1}, {along:0.42,side:-1}, {along:-0.42,side:1}, {along:-0.42,side:-1} ];
+  const phaseOffsets = [0, 0.5, 0.5, 0]; // diagonal trot pairs
+  for (let i=0;i<4;i++){
+    const la = legAnchorsLocal[i];
+    const hip = {x:px+fx*la.along*bodyLen*0.5 + rx*la.side*0.22*size, y:bodyH*0.55,
+                 z:pz+fz*la.along*bodyLen*0.5 + rz*la.side*0.22*size};
+    let lift=0, stride=0;
+    if (moving){
+      const ph = (phase + phaseOffsets[i]) % 1;
+      const spd = Math.min(1, 0.4+speed01);
+      lift = Math.max(0, Math.sin(ph*Math.PI*2)) * 0.14*size * spd;
+      stride = Math.cos(ph*Math.PI*2) * 0.16*size * spd;
+    }
+    const foot = {x:hip.x+fx*stride, y:Math.max(0.02, bodyH*0.55-legLen+lift), z:hip.z+fz*stride};
+    drawCapsule(hip, foot, 0.085*size, color);
+  }
+  if (mp.eyeGlow){
+    const s = projectIso(headPos);
+    ctx.save(); ctx.globalCompositeOperation='lighter';
+    ctx.fillStyle = mp.eyeGlow;
+    ctx.beginPath(); ctx.arc(s.x, s.y, 3*DPR*(s.scaleMul||1), 0, Math.PI*2); ctx.fill();
+    ctx.restore();
+  }
+}
+
 class Character {
   constructor(x,z,P,palette){
     this.pos = {x,z}; this.facing = Math.PI;
@@ -1215,17 +1884,24 @@ class Character {
   render(){
     const alive = this.deathT==null || this.deathT<1;
     if (!alive) return;
+    if (this.isPlayer && this.mounted && this.mountPalette){
+      const back = 0.95;
+      const hx = this.pos.x - Math.sin(this.facing)*back;
+      const hz = this.pos.z + Math.cos(this.facing)*back;
+      drawHorse(hx, hz, this.facing, this.phase, this.moving, this.speed01, this.mountPalette);
+    }
     const shadowA = 0.38*(this.deathT!=null? (1-this.deathT):1);
-    drawShadow({x:this.pos.x,z:this.pos.z}, 0.5, shadowA);
+    drawShadow({x:this.pos.x,z:this.pos.z}, this.shadowR||0.5, shadowA);
     const pose = this.getPose();
     drawHumanoid(pose, this.P, this.palette, this.facing, {x:this.pos.x,y:0,z:this.pos.z});
     if (!this.dead && !this.isPlayer) drawHPBar(this);
+    if (this.isPlayer) drawSpeechBubble(this);
   }
 }
 
 class Player extends Character {
   constructor(x,z){
-    const P = makeProportions(1.78, 1.0);
+    const P = makeProportions(1.95, 1.0);
     const palette = {skin:'#caa06f', headHi:'#e9c79a', cloth:'#3b4b52', dark:'#242b2e',
                       weapon:'#c9c9c9', bladeLen:0.42, weaponType:'melee'};
     super(x,z,P,palette);
@@ -1236,6 +1912,8 @@ class Player extends Character {
     this.maxLives = 10; this.lives = 10; this.invulnT = 0;
     this.moveTarget = null; this.attackTarget = null; this.heavyQueued=false;
     this._neverHit = false;
+    this.murmurTimer = 5+Math.random()*6; this.murmurText = null;
+    this.murmurLife = 0; this.murmurLifeMax = 3.6;
 
     const saved = loadSave();
     const so = (saved && saved.owned) || {};
@@ -1244,13 +1922,15 @@ class Player extends Character {
       armor:  new Set(so.armor  && so.armor.length  ? so.armor  : ['cloth']),
       shield: new Set(so.shield && so.shield.length ? so.shield : ['none']),
       helmet: new Set(so.helmet && so.helmet.length ? so.helmet : ['hood']),
+      mount:  new Set(so.mount  && so.mount.length  ? so.mount  : ['none']),
     };
-    this.equipped = {weapon:'rusty', armor:'cloth', shield:'none', helmet:'hood'};
+    this.equipped = {weapon:'rusty', armor:'cloth', shield:'none', helmet:'hood', mount:'none'};
     const eq = (saved && saved.equipped) || {};
     this.equipItem('weapon', this.owned.weapon.has(eq.weapon) ? eq.weapon : 'rusty', true);
     this.equipItem('armor',  this.owned.armor.has(eq.armor)   ? eq.armor  : 'cloth', true);
     this.equipItem('shield', this.owned.shield.has(eq.shield) ? eq.shield : 'none', true);
     this.equipItem('helmet', this.owned.helmet.has(eq.helmet) ? eq.helmet : 'hood', true);
+    this.equipItem('mount',  this.owned.mount.has(eq.mount)   ? eq.mount  : 'none', true);
   }
   equipItem(category, id, skipSave){
     const it = getItem(category, id);
@@ -1288,6 +1968,15 @@ class Player extends Character {
       this.palette.helmPlumeColor = it.plumeColor || null;
       this.palette.helmGlow = !!it.glow;
       this.palette.eyeGlow = it.eyeGlow || null;
+    } else if (category==='mount'){
+      this.mountId = it.id;
+      this.mounted = it.id !== 'none';
+      this.mountPalette = this.mounted ? {color:it.color, mane:it.maneColor, eyeGlow:it.eyeGlow||null, glow:!!it.glow, size:it.size||1} : null;
+    }
+    if (category==='armor' || category==='mount'){
+      const armorIt = getItem('armor', this.armorId);
+      const mountIt = getItem('mount', this.mountId);
+      this.speed = this.baseSpeed * (armorIt.speedMult!=null?armorIt.speedMult:1) * (mountIt.speedMult!=null?mountIt.speedMult:1);
     }
     if (!skipSave) this._save();
     return true;
@@ -1302,8 +1991,9 @@ class Player extends Character {
   _save(){
     writeSave(
       {weapon:Array.from(this.owned.weapon), armor:Array.from(this.owned.armor),
-       shield:Array.from(this.owned.shield), helmet:Array.from(this.owned.helmet)},
-      {weapon:this.weaponId, armor:this.armorId, shield:this.shieldId, helmet:this.helmetId}
+       shield:Array.from(this.owned.shield), helmet:Array.from(this.owned.helmet),
+       mount:Array.from(this.owned.mount)},
+      {weapon:this.weaponId, armor:this.armorId, shield:this.shieldId, helmet:this.helmetId, mount:this.mountId}
     );
   }
   takeDamage(n, sourceIsPlayer){
@@ -1346,6 +2036,7 @@ class Player extends Character {
     const w = getItem('weapon', this.weaponId);
     if (w.type === 'bow'){ this.fireArrow(w); return; }
     const heavy = this.attackKind==='heavy';
+    spawnSlashArc(this.pos.x, this.pos.z, this.facing, w.hitColor, heavy?1.3:1.0);
     const range = this.attackRange*(heavy?1.25:1.0)*(this.weaponRangeMult||1);
     let hitAny=false;
     for (const e of world.enemies){
@@ -1375,9 +2066,9 @@ class Player extends Character {
     }
     if (heavy) this.fury = 0;
     if (w.fireBolt){
-      const fx=Math.sin(this.facing), fz=-Math.cos(this.facing);
       const boltDmg = (heavy? (16+Math.random()*8) : (8+Math.random()*5)) * (this.weaponDmgMult||1) * 0.6;
-      spawnArrow(this.pos.x+fx*0.5, this.pos.z+fz*0.5, fx, fz, 11, boltDmg, w.hitColor, true, heavy, true);
+      const waveHit = spawnFireWave(this.pos.x, this.pos.z, this.facing, boltDmg, w.hitColor, heavy);
+      if (waveHit) addShake(heavy?7:3.5, heavy?0.18:0.1);
     }
   }
   fireArrow(w){
@@ -1399,6 +2090,13 @@ class Player extends Character {
   update(dt){
     if (this.invulnT>0) this.invulnT = Math.max(0, this.invulnT-dt);
     if (world.shopOpen){ this.moveStep(dt,0,0); this.tick(dt); return; }
+    if (this.murmurLife>0) this.murmurLife = Math.max(0, this.murmurLife-dt);
+    this.murmurTimer -= dt;
+    if (this.murmurTimer<=0 && !this.dead && world.state==='PLAYING'){
+      this.murmurText = pickMurmur(this);
+      this.murmurLife = this.murmurLifeMax;
+      this.murmurTimer = 13+Math.random()*11;
+    }
     const w = getItem('weapon', this.weaponId);
     const engageRange = (w.type==='bow') ? (w.bowRange||7)*(this.weaponRangeMult||1) : this.attackRange;
     let vx=0, vz=0;
@@ -1467,7 +2165,7 @@ const ENEMY_NAMES = ['Fallen Revenant'];
 class Enemy extends Character {
   constructor(x,z,mult){
     mult = mult || 1;
-    const P = makeProportions(1.7, 0.94);
+    const P = makeProportions(1.82, 0.94);
     const palette = {skin:'#8a9a86', headHi:'#a9b8a0', cloth:'#4a3f36', dark:'#332a22',
                       weapon:'#7a6b52', eyeGlow:'#7bff4a'};
     super(x,z,P,palette);
@@ -1528,6 +2226,36 @@ class Enemy extends Character {
   }
 }
 
+const BOSS_NAMES = ['朽ちた王 グラヴォス','血染めの怨霊 ネクロア','鉄牢の看守 バルグレム','深淵の贄 モルティア','咆哮する終焉 ドレアゴス'];
+class Boss extends Enemy {
+  constructor(x,z,mult){
+    super(x,z,mult*1.0);
+    this.isBoss = true;
+    this.name = BOSS_NAMES[Math.floor(Math.random()*BOSS_NAMES.length)];
+    // taller AND bulkier -- reuses the same proportion system, just scaled way up
+    this.P = makeProportions(3.1, 1.55);
+    this.palette = {skin:'#5a3a3a', headHi:'#7a4a4a', cloth:'#3a1414', dark:'#1c0e0e',
+                     weapon:'#8a2020', eyeGlow:'#ff3a2a', armorGlow:true};
+    this.maxHp = (420+Math.random()*120) * mult; this.hp = this.maxHp;
+    this.speed = 1.55*Math.min(1.35,1+(mult-1)*0.4);
+    this.attackRange = 2.1;
+    this.aggro = 9.5;
+    this.shadowR = 1.15;
+  }
+  onAttackHitFrame(){
+    const dx=world.player.pos.x-this.pos.x, dz=world.player.pos.z-this.pos.z;
+    const dist = Math.hypot(dx,dz);
+    if (dist > this.attackRange*1.25 || world.player.dead) return;
+    const fx=Math.sin(this.facing), fz=-Math.cos(this.facing);
+    const nd = dist>0.001? {x:dx/dist,z:dz/dist}:{x:fx,z:fz};
+    if (fx*nd.x+fz*nd.z < 0.25) return;
+    const dmg = (22+Math.random()*14) * this.dmgMult;
+    world.player.takeDamage(dmg, false);
+    addShake(12,0.28);
+    spawnBurst({x:world.player.pos.x,y:1.3,z:world.player.pos.z}, 'rgba(255,80,60,ALPHA)', 18, 3.0);
+  }
+}
+
 // ============================================================ WORLD =======
 const keys = {};
 let shiftHeld = false;
@@ -1545,10 +2273,21 @@ window.addEventListener('keyup', (e)=>{
 function setPlayUIVisible(show){
   document.getElementById('hud').style.display = show ? 'flex' : 'none';
   document.getElementById('shopBtn').style.display = show ? 'inline-block' : 'none';
+  const vmb = document.getElementById('viewModeBtn');
+  if (vmb) vmb.style.display = show ? 'inline-block' : 'none';
   if (isTouchDevice){
     const mc = document.getElementById('mobileControls');
     if (mc) mc.style.display = show ? 'flex' : 'none';
   }
+}
+function updateViewModeBtn(){
+  const btn = document.getElementById('viewModeBtn');
+  if (!btn) return;
+  btn.textContent = viewMode === 'perspective' ? '\u25C7 \u900F\u8996' : '\u25C7 ISO';
+}
+function toggleViewMode(){
+  viewMode = viewMode === 'perspective' ? 'iso' : 'perspective';
+  updateViewModeBtn();
 }
 function attemptSpaceAttack(forceHeavy){
   const p = world.player;
@@ -1692,7 +2431,8 @@ const world = {
   floorQuota: 8,
   stairsSpawned: false,
   stairs: null,
-  selectedItem: {weapon:null, armor:null, shield:null, helmet:null},
+  selectedItem: {weapon:null, armor:null, shield:null, helmet:null, mount:null},
+  biome: 'meadow',
 };
 function enemyMultForFloor(floor){ return 1 + (floor-1)*0.16; }
 function maxEnemiesForFloor(floor){ return Math.min(11, 4 + Math.floor(floor*0.75)); }
@@ -1708,6 +2448,13 @@ function spawnEnemy(){
   const {x,z} = randomSpawnPoint();
   world.enemies.push(new Enemy(x,z, enemyMultForFloor(world.floor)));
 }
+function spawnBoss(){
+  const {x,z} = randomSpawnPoint();
+  const boss = new Boss(x,z, enemyMultForFloor(world.floor)*0.85);
+  world.enemies.push(boss);
+  showFloorBanner('\u26A0 BOSS: '+boss.name, true);
+  return boss;
+}
 function spawnStairs(){
   const {x,z} = randomSpawnPoint();
   world.stairs = {x,z};
@@ -1720,6 +2467,7 @@ function descendFloor(){
   world.floorQuota = 7 + world.floor*3;
   world.stairsSpawned = false;
   world.stairs = null;
+  world.biome = pickBiome(world.floor);
   ARENA_R = Math.min(32, 18 + (world.floor-1)*1.3);
   buildArena();
   world.enemies = [];
@@ -1730,7 +2478,14 @@ function descendFloor(){
   const initial = Math.min(3+Math.floor(world.floor/2), 6);
   for (let i=0;i<initial;i++) spawnEnemy();
   showFloorBanner('FLOOR '+world.floor, true);
+  // randomly place a boss on this floor (never floor 1, ramps up slightly with depth) --
+  // delayed so its own banner doesn't collide with the FLOOR/biome banner above
+  const bossChance = world.floor>=2 ? Math.min(0.55, 0.30+world.floor*0.02) : 0;
+  if (Math.random() < bossChance){
+    setTimeout(()=>spawnBoss(), 2500);
+  }
 }
+let floorBannerTimer = null;
 function showFloorBanner(text, big){
   const el = document.getElementById('floorBanner');
   if (!el) return;
@@ -1739,13 +2494,17 @@ function showFloorBanner(text, big){
   void el.offsetWidth; // restart CSS animation
   if (big) el.classList.add('big');
   el.classList.add('show');
+  // big impact text is only meant to be a momentary announcement -- fade it back out instead
+  // of leaving a giant "FLOOR 2" glued to the middle of the screen for the rest of the floor.
+  if (floorBannerTimer) clearTimeout(floorBannerTimer);
+  floorBannerTimer = setTimeout(()=>{ el.classList.remove('show'); floorBannerTimer = null; }, big ? 2200 : 1800);
 }
 function resetGame(){
   world.state='PLAYING';
   const prevOwned = world.player.owned, prevEquipped = world.player.equipped;
   world.player = new Player(0,2.5); // reloads owned/equipped items from localStorage save
   // safety net: also carry over in-memory purchases in case localStorage was unavailable
-  for (const cat of ['weapon','armor','shield','helmet']){
+  for (const cat of ['weapon','armor','shield','helmet','mount']){
     for (const id of prevOwned[cat]) world.player.owned[cat].add(id);
     world.player.equipItem(cat, prevEquipped[cat], true);
   }
@@ -1754,6 +2513,7 @@ function resetGame(){
   world.killCount = 0;
   world.floor = 1; world.floorKills = 0; world.floorQuota = 8;
   world.stairsSpawned = false; world.stairs = null;
+  world.biome = 'meadow';
   ARENA_R = 18;
   buildArena();
   for (let i=0;i<3;i++) spawnEnemy();
@@ -1828,6 +2588,9 @@ function statsHtml(category, it){
   if (category === 'helmet'){
     return `頭部防御 <b>${Math.round(it.defense*100)}%軽減</b>`;
   }
+  if (category === 'mount'){
+    return `移動速度 <b>${Math.round((it.speedMult!=null?it.speedMult:1)*100)}%</b>`;
+  }
   return '';
 }
 
@@ -1897,7 +2660,7 @@ function renderActionBar(category){
     btn.className = 'equipBtn big';
     btn.onclick = ()=>{ p.equipItem(category, it.id); renderShopGrid(); };
   } else {
-    btn.innerHTML = '<span class="pplogo">Pay</span><span class="pplogo2">Pal</span>&nbsp;で購入';
+    btn.innerHTML = '<span class="ppwrap"><span class="pplogo">Pay</span><span class="pplogo2">Pal</span></span>&nbsp;で購入';
     btn.className = 'payBtn big';
     btn.onclick = ()=> openPaypalCheckout(category, it);
   }
@@ -1920,7 +2683,7 @@ function renderLifeActionBar(){
   } else {
     btn.disabled = false;
     btn.className = 'payBtn big';
-    btn.innerHTML = '<span class="pplogo">Pay</span><span class="pplogo2">Pal</span>&nbsp;で購入 (+1)';
+    btn.innerHTML = '<span class="ppwrap"><span class="pplogo">Pay</span><span class="pplogo2">Pal</span></span>&nbsp;で購入 (+1)';
     btn.onclick = ()=> openPaypalCheckout('life', {id:'life', name:'予備のライフ', price:LIFE_PRICE});
   }
 }
@@ -1941,7 +2704,7 @@ function renderBundleBanner(){
     btn.onclick = ()=>{ BUNDLE.items.forEach(x=> world.player.equipItem(x.cat, x.id)); renderShopGrid(); renderBundleBanner(); };
   } else {
     btn.disabled = false;
-    btn.innerHTML = '<span class="pplogo">Pay</span><span class="pplogo2">Pal</span>&nbsp;で即入手';
+    btn.innerHTML = '<span class="ppwrap"><span class="pplogo">Pay</span><span class="pplogo2">Pal</span></span>&nbsp;で即入手';
     btn.className = 'payBtn big';
     btn.onclick = ()=> openPaypalCheckout('bundle', BUNDLE);
   }
@@ -1972,6 +2735,8 @@ function closeShop(){
 function toggleShop(){ world.shopOpen ? closeShop() : openShop(); }
 
 document.getElementById('shopBtn').addEventListener('click', openShop);
+document.getElementById('viewModeBtn').addEventListener('click', toggleViewMode);
+updateViewModeBtn();
 document.getElementById('shopClose').addEventListener('click', closeShop);
 document.getElementById('continueBuyBtn').addEventListener('click', (e)=>{
   e.stopPropagation();
@@ -2062,8 +2827,13 @@ function updateWorld(dt){
       e.update(dt);
       if (e.dead && !e._killCounted){
         e._killCounted = true;
-        world.killCount++;
-        world.floorKills++;
+        const bonus = e.isBoss ? 3 : 1;
+        world.killCount += bonus;
+        world.floorKills += bonus;
+        if (e.isBoss){
+          showFloorBanner(e.name+' \u3092\u5012\u3057\u305F\uFF01', true);
+          spawnBurst({x:e.pos.x,y:1.4,z:e.pos.z}, 'rgba(255,150,60,ALPHA)', 30, 4.2);
+        }
       }
     }
     world.enemies = world.enemies.filter(e=> !(e.dead && e.removeAfter));
@@ -2106,12 +2876,18 @@ function screenCenterShaken(){
 screenCenter = screenCenterShaken;
 
 function renderFrame(dt){
+  ctx.setTransform(1,0,0,1,0,0);
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+  if (viewMode === 'perspective') updatePerspCamera();
+
   drawBackground();
   drawFloor(perfNow);
+  drawPonds(perfNow);
   drawTorchGlow(perfNow);
   drawStairs();
 
   const items = [];
+  wallBlocks.forEach(wb=> items.push({depth:wb.x+wb.z, draw:()=>drawWallBlock(wb)}));
   pillars.forEach(p=> items.push({depth:p.x+p.z-0.05, draw:()=>drawPillar(p)}));
   decorations.forEach(d=> items.push({depth:d.x+d.z-0.02, draw:()=>drawDecoration(d)}));
   items.push({depth:world.player.pos.x+world.player.pos.z, draw:()=>world.player.render()});
@@ -2121,10 +2897,13 @@ function renderFrame(dt){
 
   torches.forEach(drawTorchStick);
   updateDrawArrows(dt);
+  updateDrawFireWaves(dt);
   updateDrawAuraStreaks(dt);
+  updateDrawSlashTrails(dt);
   updateDrawDust(dt);
   updateDrawParticles(dt);
   updateDrawDamageNumbers(dt);
+  if (world.biome === 'snow') updateDrawSnow(dt);
 }
 
 let lastT = null;
