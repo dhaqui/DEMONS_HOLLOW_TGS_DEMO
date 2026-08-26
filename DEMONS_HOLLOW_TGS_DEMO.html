@@ -1,0 +1,1744 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>DEMON'S HOLLOW -- TGS Playable Demo</title>
+<style>
+  html,body{margin:0;padding:0;width:100%;height:100%;overflow:hidden;background:#000;
+    font-family:'Trebuchet MS','Hiragino Kaku Gothic ProN',sans-serif;user-select:none;}
+  #game{display:block;width:100%;height:100%;background:#050506;cursor:crosshair;}
+
+  .overlay{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;
+    color:#e8d9b8;text-align:center;z-index:20;}
+  #titleScreen{background:radial-gradient(ellipse at center, rgba(20,10,8,0.35) 0%, rgba(0,0,0,0.88) 75%);
+    cursor:pointer;}
+  #titleScreen h1{font-size:clamp(36px,7vw,84px);letter-spacing:6px;margin:0;
+    color:#c9a24a;text-shadow:0 0 18px #7a1010,0 0 40px #400,0 2px 0 #000;
+    font-weight:900;}
+  #titleScreen .subtitle{margin-top:6px;font-size:clamp(12px,2vw,18px);letter-spacing:4px;color:#8a95a8;
+    text-shadow:0 0 8px #000;}
+  #titleScreen .tgsbadge{margin-top:26px;padding:6px 18px;border:1px solid #6b4a1e;color:#d8bd7a;
+    font-size:12px;letter-spacing:3px;background:rgba(60,30,10,0.35);border-radius:2px;}
+  #titleScreen .prompt{margin-top:46px;font-size:clamp(14px,2vw,20px);color:#eee;letter-spacing:2px;
+    animation:pulse 1.6s ease-in-out infinite;}
+  #titleScreen .legend{margin-top:34px;font-size:12px;color:#8a8378;line-height:1.9;letter-spacing:1px;}
+  #titleScreen .legend b{color:#c9a24a;}
+  @keyframes pulse{0%,100%{opacity:.35}50%{opacity:1}}
+
+  #gameOver{background:rgba(5,0,0,0.82);display:none;cursor:pointer;}
+  #gameOver h1{font-size:clamp(30px,6vw,64px);color:#8b0000;letter-spacing:8px;text-shadow:0 0 22px #500;margin:0;}
+  #gameOver .stat{margin-top:14px;font-size:18px;color:#cbb;letter-spacing:2px;}
+  #gameOver .prompt{margin-top:36px;font-size:16px;color:#eee;letter-spacing:2px;animation:pulse 1.6s ease-in-out infinite;}
+
+  #hud{position:absolute;left:0;right:0;bottom:0;display:flex;justify-content:space-between;align-items:flex-end;
+    padding:0 3vw 2vh 3vw;pointer-events:none;z-index:10;box-sizing:border-box;}
+  .orb{position:relative;width:min(13vw,110px);height:min(13vw,110px);border-radius:50%;
+    background:#0d0b0a;border:4px solid #33291a;box-shadow:0 0 0 3px #000,0 6px 14px rgba(0,0,0,.6),inset 0 0 18px #000;
+    overflow:hidden;}
+  .orb .fill{position:absolute;left:0;right:0;bottom:0;width:100%;transition:height .25s ease-out;}
+  #hpFill{background:linear-gradient(180deg,#ff6b5a,#8c0f0f 60%,#4a0505);}
+  #furyFill{background:linear-gradient(180deg,#7fd0ff,#1a4fb0 60%,#0a2258);}
+  .orb .label{position:absolute;top:50%;left:0;right:0;transform:translateY(-50%);text-align:center;
+    color:#fff;font-size:13px;font-weight:bold;text-shadow:0 1px 3px #000;}
+  .orb .glass{position:absolute;inset:0;border-radius:50%;box-shadow:inset 0 10px 18px rgba(255,255,255,.08),inset 0 -14px 20px rgba(0,0,0,.5);}
+  .orbCol{display:flex;flex-direction:column;align-items:center;gap:8px;}
+  .orbSpacer{height:20px;}
+  #livesRow{display:flex;gap:2px;background:rgba(0,0,0,.35);padding:4px 8px;border-radius:10px;}
+  .heart{font-size:13px;opacity:.28;filter:grayscale(1);}
+  .heart.filled{opacity:1;filter:none;color:#ff3b4a;text-shadow:0 0 5px #a00;}
+  #midHud{flex:1;display:flex;flex-direction:column;align-items:center;gap:6px;margin-bottom:14px;color:#d8cba8;}
+  #killCount{font-size:15px;letter-spacing:2px;text-shadow:0 0 6px #000;}
+  #stairsMsg{font-size:12px;color:#c199ff;letter-spacing:2px;opacity:0;transition:opacity .3s;text-shadow:0 0 8px #60c;}
+  #stairsMsg.show{opacity:1;animation:pulse 1.4s ease-in-out infinite;}
+  #furyReadyMsg{font-size:12px;color:#7fd0ff;letter-spacing:2px;opacity:0;transition:opacity .3s;text-shadow:0 0 6px #000;}
+  #furyReadyMsg.show{opacity:1;}
+  #floorBanner{position:absolute;top:26%;left:50%;transform:translate(-50%,-20px);color:#f0d080;
+    font-size:clamp(22px,4vw,44px);letter-spacing:6px;font-weight:900;text-shadow:0 0 20px rgba(160,90,255,.7),0 2px 0 #000;
+    opacity:0;pointer-events:none;z-index:16;transition:opacity .6s ease, transform .6s ease;}
+  #floorBanner.show{opacity:1;transform:translate(-50%,0);}
+  #floorBanner.big{color:#ffe38a;text-shadow:0 0 26px rgba(255,200,80,.8),0 2px 0 #000;}
+
+  #tip{position:absolute;top:16px;left:50%;transform:translateX(-50%);color:#cfcac0;font-size:13px;
+    letter-spacing:1px;background:rgba(0,0,0,.4);padding:6px 14px;border-radius:3px;z-index:10;
+    transition:opacity 1s;pointer-events:none;text-align:center;}
+
+  #shopBtn{position:absolute;top:16px;right:16px;z-index:15;pointer-events:auto;
+    background:linear-gradient(180deg,#2a2117,#141009);border:1px solid #6b4a1e;color:#e8cf8a;
+    font-size:13px;letter-spacing:2px;padding:9px 16px;border-radius:4px;cursor:pointer;
+    box-shadow:0 4px 10px rgba(0,0,0,.5);display:none;}
+  #shopBtn:hover{background:#3a2e1c;}
+
+  #shopScreen{background:rgba(6,4,3,0.94);display:none;z-index:30;padding:4vh 2vw;box-sizing:border-box;
+    overflow-y:auto;justify-content:flex-start;}
+  #shopScreen h1{font-size:clamp(24px,4vw,40px);color:#c9a24a;letter-spacing:4px;margin:0 0 4px 0;
+    text-shadow:0 0 14px #7a1010;}
+  #shopScreen .shopSub{font-size:12px;color:#9a8f7a;letter-spacing:2px;margin-bottom:26px;}
+  #shopClose{position:absolute;top:18px;right:20px;background:none;border:1px solid #6b4a1e;color:#e8cf8a;
+    font-size:20px;width:38px;height:38px;border-radius:50%;cursor:pointer;line-height:1;}
+  #weaponGrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:14px;
+    width:min(1100px,94vw);margin-bottom:18px;}
+  .wcard{background:linear-gradient(180deg,#1c1712,#100d0a);border:1px solid #4a3c28;border-radius:8px;
+    padding:12px;text-align:left;position:relative;overflow:hidden;cursor:pointer;transition:transform .12s,border-color .12s;}
+  .wcard:hover{transform:translateY(-2px);border-color:#8a6a3a;}
+  .wcard.selected{border-color:#c9a24a;box-shadow:0 0 0 2px rgba(201,162,74,.55), 0 0 16px rgba(201,162,74,.35);}
+  .wswatch{width:100%;height:52px;border-radius:6px;margin-bottom:8px;
+    background:linear-gradient(135deg, var(--wc1), var(--wc2));box-shadow:inset 0 0 20px rgba(0,0,0,.4);}
+  .badge{position:absolute;top:6px;right:6px;font-size:9px;letter-spacing:.5px;padding:2px 7px;border-radius:8px;
+    font-weight:800;}
+  .ownedBadge{background:rgba(255,255,255,.12);color:#cfc7b0;}
+  .equippedBadge{background:linear-gradient(90deg,#f0d080,#ffb700);color:#1a1408;}
+  .wname{font-size:13.5px;color:#eee0c0;letter-spacing:.5px;font-weight:bold;}
+  .wpriceSmall{font-size:12px;color:#f0d080;letter-spacing:.5px;margin-top:6px;}
+  .wdesc{font-size:11.5px;color:#a89d89;margin:6px 0 10px 0;line-height:1.5;}
+  .wstats{font-size:11px;color:#8fa0a8;line-height:1.6;}
+  .wstats b{color:#cfe0e6;}
+  .wprice{font-size:15px;color:#f0d080;letter-spacing:1px;font-weight:800;white-space:nowrap;}
+
+  .equipBtn{background:#33291a;border:1px solid #6b4a1e;color:#e8cf8a;padding:11px 22px;border-radius:22px;
+    font-size:13px;letter-spacing:1px;cursor:pointer;white-space:nowrap;}
+  .equipBtn:disabled{opacity:.55;cursor:default;}
+  .equipBtn.current{background:#4a3c1e;border-color:#c9a24a;color:#fff;}
+  .payBtn{display:flex;align-items:center;justify-content:center;gap:6px;white-space:nowrap;
+    background:#ffc439;border:none;color:#111;font-weight:800;font-size:13px;letter-spacing:.5px;
+    padding:11px 22px;border-radius:22px;cursor:pointer;box-shadow:0 2px 6px rgba(0,0,0,.4);}
+  .payBtn:hover{background:#ffb700;}
+  .payBtn:disabled{opacity:.55;cursor:default;}
+  .payBtn .pplogo{color:#003087;font-style:italic;font-weight:900;}
+  .payBtn .pplogo2{color:#009cde;font-style:italic;font-weight:900;}
+  .payBtn.big, .equipBtn.big{padding:13px 28px;font-size:14px;}
+
+  #shopTabs{display:flex;gap:10px;margin-bottom:18px;flex-wrap:wrap;justify-content:center;}
+  .shopTab{background:#1c1712;border:1px solid #4a3c28;color:#a89d89;padding:9px 20px;border-radius:20px;
+    font-size:13px;letter-spacing:1px;cursor:pointer;}
+  .shopTab.current{background:#3a2e1c;border-color:#c9a24a;color:#f0d080;}
+  .wcard.legendary{border-color:#c9a24a;box-shadow:0 0 18px rgba(201,162,74,.45);}
+  .wcard.legendary .wname{color:#ffe38a;text-shadow:0 0 8px rgba(255,220,120,.6);}
+  .legendTag{display:inline-block;font-size:10px;color:#1a1408;background:linear-gradient(90deg,#f0d080,#ffb700);
+    padding:2px 8px;border-radius:10px;font-weight:800;letter-spacing:1px;margin-left:6px;vertical-align:middle;}
+
+  #bundleBanner{width:min(1100px,94vw);display:flex;align-items:center;gap:20px;
+    background:linear-gradient(120deg,#241708,#3a2408 50%,#241708);border:1px solid #c9a24a;border-radius:10px;
+    padding:16px 22px;margin-bottom:20px;box-shadow:0 0 26px rgba(201,162,74,.25), inset 0 0 30px rgba(255,200,80,.06);}
+  .bundleInfo{flex:1;}
+  .bundleTitle{font-size:16px;color:#ffe38a;letter-spacing:1px;font-weight:900;text-shadow:0 0 10px rgba(255,210,110,.5);}
+  .bundleDesc{font-size:11.5px;color:#cbb896;margin-top:6px;}
+  .bundlePrice{margin-top:8px;font-size:14px;}
+  .bundleOld{color:#8a7a5a;text-decoration:line-through;font-size:12px;margin-right:8px;}
+  .bundleNew{color:#ffe38a;font-weight:900;font-size:17px;}
+  .bundleOff{background:#8b0000;color:#fff;font-size:10px;padding:2px 7px;border-radius:8px;margin-left:8px;
+    font-weight:800;letter-spacing:.5px;}
+
+  #shopActionBar{width:min(1100px,94vw);display:flex;align-items:center;gap:16px;
+    background:linear-gradient(180deg,#1c1712,#100d0a);border:1px solid #4a3c28;border-radius:10px;
+    padding:14px 18px;position:sticky;bottom:0;}
+  .sabSwatch{width:56px;height:56px;flex:0 0 auto;margin-bottom:0;}
+  #sabInfo{flex:1;min-width:0;}
+  #sabInfo .wname{font-size:15px;}
+  #sabInfo .wdesc{margin:4px 0;min-height:0;}
+  #sabInfo .wstats{margin-bottom:0;}
+
+  #paypalModal{background:rgba(0,0,0,.7);display:none;z-index:40;}
+  .ppbox{width:min(360px,90vw);background:#fff;border-radius:10px;overflow:hidden;color:#222;
+    box-shadow:0 20px 50px rgba(0,0,0,.6);}
+  .ppheader{background:#003087;color:#fff;padding:16px 20px;font-size:18px;letter-spacing:.5px;}
+  .ppheader b{color:#009cde;}
+  .ppbody{padding:20px;text-align:left;}
+  .ppRow{display:flex;justify-content:space-between;font-size:13px;color:#444;padding:7px 0;
+    border-bottom:1px solid #eee;}
+  .ppRow b{color:#111;}
+  .ppTotal{font-size:16px;font-weight:800;color:#111;}
+  .ppDisclaimer{font-size:10.5px;color:#999;margin-top:10px;line-height:1.5;}
+  .ppPayBtn{width:100%;margin-top:16px;background:#ffc439;border:none;padding:13px 0;border-radius:24px;
+    font-size:15px;font-weight:800;cursor:pointer;color:#003087;}
+  .ppPayBtn:hover{background:#ffb700;}
+  .ppCancel{width:100%;margin-top:8px;background:none;border:none;color:#888;font-size:12px;
+    padding:8px 0;cursor:pointer;text-decoration:underline;}
+  .ppStatus{text-align:center;padding:30px 20px;}
+  .ppSpinner{width:40px;height:40px;border:4px solid #eee;border-top-color:#003087;border-radius:50%;
+    margin:0 auto 16px auto;animation:spin 0.8s linear infinite;}
+  @keyframes spin{to{transform:rotate(360deg);}}
+  .ppCheck{width:56px;height:56px;border-radius:50%;background:#0b8a3a;color:#fff;font-size:32px;
+    line-height:56px;margin:0 auto 14px auto;}
+</style>
+</head>
+<body>
+<canvas id="game"></canvas>
+
+<button id="shopBtn">⚔️ SHOP</button>
+<div id="tip">WASD / クリックで移動　・　敵をクリック or Space で攻撃　・　Shift+クリックで渾身の一撃 (Fury満タン時)</div>
+
+<div id="hud" style="display:none;">
+  <div class="orbCol">
+    <div id="livesRow"></div>
+    <div class="orb"><div class="fill" id="hpFill" style="height:100%;"></div><div class="glass"></div><div class="label" id="hpLabel">100</div></div>
+  </div>
+  <div id="midHud">
+    <div id="killCount">SOULS SLAIN: 0</div>
+    <div id="stairsMsg">階段が出現！近づいて次の階へ</div>
+    <div id="furyReadyMsg">FURY READY -- SHIFT+CLICK</div>
+  </div>
+  <div class="orbCol">
+    <div class="orbSpacer"></div>
+    <div class="orb"><div class="fill" id="furyFill" style="height:0%;"></div><div class="glass"></div><div class="label" id="furyLabel">FURY</div></div>
+  </div>
+</div>
+<div id="floorBanner"></div>
+
+<div id="titleScreen" class="overlay">
+  <h1>DEMON'S HOLLOW</h1>
+  <div class="subtitle">AN ISOMETRIC DUNGEON DEMO</div>
+  <div class="tgsbadge">TOKYO GAME SHOW 2026 &middot; PLAYABLE DEMO BUILD</div>
+  <div class="prompt">クリック / タップして開始</div>
+  <div class="legend">
+    <b>移動</b>: WASD もしくは地面をクリック&nbsp;&nbsp;|&nbsp;&nbsp; <b>攻撃</b>: 敵をクリック / Space<br>
+    <b>渾身の一撃</b>: Fury 満タン時に Shift+クリック&nbsp;&nbsp;|&nbsp;&nbsp; <b>B</b>キーでショップ
+  </div>
+  <div class="tgsbadge" id="titleShopLink" style="margin-top:14px;cursor:pointer;">🛒 SHOP を見る (武器・防具・盾・ライフ)</div>
+</div>
+
+<div id="gameOver" class="overlay">
+  <h1>YOU HAVE FALLEN</h1>
+  <div class="stat" id="finalKills">Souls Slain: 0</div>
+  <div class="stat" id="finalFloor">Floor Reached: 1</div>
+  <button id="continueBuyBtn" class="payBtn big" style="margin-top:24px;max-width:360px;">
+    <span class="pplogo">Pay</span><span class="pplogo2">Pal</span>&nbsp;でライフを購入して続ける (&yen;300)
+  </button>
+  <div class="prompt" style="margin-top:20px;">クリックして最初からリトライ</div>
+</div>
+
+<div id="shopScreen" class="overlay" style="align-items:center;">
+  <button id="shopClose">&times;</button>
+  <h1>SHOP</h1>
+  <div class="shopSub">TGS DEMO &middot; ダミー決済 (実際の課金は発生しません)</div>
+
+  <div id="bundleBanner">
+    <div class="bundleInfo">
+      <div class="bundleTitle">👑 伝説の最強セット<span class="legendTag">ULTIMATE</span></div>
+      <div class="bundleDesc">エクスカリバー + ドラゴンスケイルメイル + イージスの盾 を今すぐ全て入手</div>
+      <div class="bundlePrice"><span class="bundleOld">&yen;182,800</span> <span class="bundleNew">&yen;148,000</span> <span class="bundleOff">19% OFF</span></div>
+    </div>
+    <button id="bundleBuyBtn" class="payBtn big">-</button>
+  </div>
+
+  <div id="shopTabs">
+    <button class="shopTab current" data-cat="weapon">⚔️ 武器</button>
+    <button class="shopTab" data-cat="armor">🛡️ 防具</button>
+    <button class="shopTab" data-cat="shield">🔰 盾</button>
+    <button class="shopTab" data-cat="life">❤️ ライフ</button>
+  </div>
+  <div id="weaponGrid"></div>
+
+  <div id="shopActionBar">
+    <div class="wswatch sabSwatch" id="sabSwatch"></div>
+    <div id="sabInfo">
+      <div class="wname" id="sabName">-</div>
+      <div class="wdesc" id="sabDesc"></div>
+      <div class="wstats" id="sabStats"></div>
+    </div>
+    <div class="wprice" id="sabPrice"></div>
+    <button id="sabActionBtn" class="payBtn big">-</button>
+  </div>
+</div>
+
+<div id="paypalModal" class="overlay">
+  <div class="ppbox" id="ppboxInner"></div>
+</div>
+
+<script>
+'use strict';
+/* =========================================================================
+   DEMON'S HOLLOW -- TGS Demo Build
+   Self-contained isometric ARPG demo. No external assets/libraries.
+   Procedural humanoid rig with two-bone IK for anatomically plausible motion.
+   ========================================================================= */
+
+// ---------------------------------------------------------------- Vec3 ----
+const V3 = {
+  add:(a,b)=>({x:a.x+b.x,y:a.y+b.y,z:a.z+b.z}),
+  sub:(a,b)=>({x:a.x-b.x,y:a.y-b.y,z:a.z-b.z}),
+  scale:(a,s)=>({x:a.x*s,y:a.y*s,z:a.z*s}),
+  len:(a)=>Math.sqrt(a.x*a.x+a.y*a.y+a.z*a.z),
+  norm:(a)=>{const l=V3.len(a)||1e-6; return {x:a.x/l,y:a.y/l,z:a.z/l};},
+  dot:(a,b)=>a.x*b.x+a.y*b.y+a.z*b.z,
+  cross:(a,b)=>({x:a.y*b.z-a.z*b.y, y:a.z*b.x-a.x*b.z, z:a.x*b.y-a.y*b.x}),
+  clone:(a)=>({x:a.x,y:a.y,z:a.z}),
+};
+function rotateAboutAxis(v, axis, angle){
+  const c=Math.cos(angle), s=Math.sin(angle);
+  const ax=V3.norm(axis);
+  const term1=V3.scale(v,c);
+  const term2=V3.scale(V3.cross(ax,v),s);
+  const term3=V3.scale(ax, V3.dot(ax,v)*(1-c));
+  return V3.add(V3.add(term1,term2),term3);
+}
+function clamp(v,lo,hi){return Math.max(lo,Math.min(hi,v));}
+function lerp(a,b,t){return a+(b-a)*t;}
+
+// ---------------------------------------------------------- two-bone IK ---
+// root: world pos of shoulder/hip. target: desired hand/foot world pos.
+// L1/L2: segment lengths. hingeSign flips which way the joint bends.
+// poleForward: rough direction the elbow/knee should point toward.
+function twoBoneIK(root, target, L1, L2, hingeSign, poleForward){
+  const toTarget = V3.sub(target, root);
+  let dist = V3.len(toTarget);
+  dist = clamp(dist, Math.abs(L1-L2)+1e-4, L1+L2-1e-4);
+  const d = V3.norm(toTarget);
+
+  const cosHip = clamp((L1*L1+dist*dist-L2*L2)/(2*L1*dist), -1, 1);
+  const hipAngle = Math.acos(cosHip);
+  const cosKnee = clamp((L1*L1+L2*L2-dist*dist)/(2*L1*L2), -1, 1);
+  const kneeInterior = Math.acos(cosKnee);
+
+  const hinge = {x:1,y:0,z:0}; // left-right axis: anatomical hinge for knee/elbow
+  let perp = V3.sub(poleForward, V3.scale(d, V3.dot(poleForward,d)));
+  if (V3.len(perp) < 1e-6) perp = {x:0,y:0,z:1};
+  perp = V3.norm(perp);
+  const bendDir = Math.sign(V3.dot(V3.cross(hinge,d), perp)) || 1;
+
+  const angle = hipAngle*bendDir*hingeSign;
+  const thighDir = rotateAboutAxis(d, hinge, angle);
+  const mid = V3.add(root, V3.scale(thighDir, L1));
+
+  const shinAngle = -(Math.PI-kneeInterior)*bendDir*hingeSign;
+  const shinDir = rotateAboutAxis(thighDir, hinge, shinAngle);
+  const end = V3.add(mid, V3.scale(shinDir, L2));
+  return {mid, end};
+}
+
+// ------------------------------------------------------- body proportions -
+function makeProportions(H, buildFactor){
+  buildFactor = buildFactor||1;
+  return {
+    H,
+    thigh: 0.25*H, shin: 0.22*H,
+    torso: 0.30*H, neck: 0.06*H, headR: 0.065*H*buildFactor,
+    upperArm: 0.19*H*buildFactor, foreArm: 0.16*H*buildFactor,
+    hipHalfW: 0.095*H*buildFactor, shHalfW: 0.115*H*buildFactor,
+    limbR: 0.045*H*buildFactor, torsoR: 0.10*H*buildFactor,
+  };
+}
+
+// ----------------------------------------------------------- pose builder -
+// state: {phase, moving, speed01, attackT (0..1 or null), attackKind,
+//         hitT (0..1 or null), deathT (0..1 or null), idleT, facing (radians)}
+function buildPose(P, state){
+  const idle = state.idleT||0;
+  const bobAmp = state.moving ? 0.025*P.H : 0.012*P.H;
+  const bob = Math.sin(state.phase*2*Math.PI*2)*bobAmp*(state.moving?1:0) + Math.sin(idle*1.6)*0.006*P.H;
+  let hipY = P.thigh+P.shin+bob;
+
+  let leanF = state.moving? 0.05: 0.0;
+  if (state.attackT!=null) leanF += 0.10*Math.sin(state.attackT*Math.PI);
+  let crouch = 0;
+  if (state.deathT!=null) crouch = state.deathT*(P.thigh+P.shin)*0.9;
+  hipY -= crouch;
+
+  const hipsC = {x:0,y:hipY,z:0};
+  let leftHip  = V3.add(hipsC, {x:-P.hipHalfW,y:0,z:0});
+  let rightHip = V3.add(hipsC, {x: P.hipHalfW,y:0,z:0});
+
+  const stepLen = 0.30*P.H, lift = 0.11*P.H;
+  function footTarget(ph, sideSign){
+    if (!state.moving){
+      const sway = Math.sin(idle*1.3+sideSign)*0.01*P.H;
+      return {x:sideSign*P.hipHalfW, y:0, z:sway};
+    }
+    const x = Math.cos(ph*2*Math.PI);
+    const fwd = -x*stepLen*0.5*clamp(state.speed01,0.3,1);
+    let liftAmt=0;
+    if (ph>0.5 && ph<1.0) liftAmt = Math.max(0, Math.sin((ph-0.5)*2*Math.PI))*lift*clamp(state.speed01,0.3,1);
+    return {x:sideSign*P.hipHalfW, y:liftAmt, z:fwd};
+  }
+  const lTgt = footTarget(state.phase, -1);
+  const rTgt = footTarget((state.phase+0.5)%1, 1);
+
+  const lLeg = twoBoneIK(leftHip,  lTgt, P.thigh, P.shin, 1, {x:0,y:0,z:1});
+  const rLeg = twoBoneIK(rightHip, rTgt, P.thigh, P.shin, 1, {x:0,y:0,z:1});
+
+  const spineLean = state.moving? 0.035*Math.sin(state.phase*2*Math.PI*2) : Math.sin(idle*1.1)*0.01;
+  let torsoTilt = 0;
+  if (state.attackT!=null) torsoTilt = 0.18*Math.sin(clamp(state.attackT,0,1)*Math.PI);
+  if (state.hitT!=null) torsoTilt -= 0.35*Math.sin(clamp(state.hitT,0,1)*Math.PI);
+  if (state.deathT!=null) torsoTilt = -state.deathT*1.3;
+
+  const shouldersC = V3.add(hipsC, {x:spineLean+torsoTilt*0.15, y:P.torso*(1-crouch/(P.thigh+P.shin)*0.3), z:-torsoTilt*P.torso*0.6});
+  const neckTop = V3.add(shouldersC, {x:0,y:P.neck,z:0});
+  const headC = V3.add(neckTop, {x:0,y:P.headR,z: -torsoTilt*0.05});
+
+  let leftShoulder  = V3.add(shouldersC, {x:-P.shHalfW,y:0,z:0});
+  let rightShoulder = V3.add(shouldersC, {x: P.shHalfW,y:0,z:0});
+
+  let lHandTgt, rHandTgt, weaponSwing=0;
+  if (state.attackT!=null){
+    const t = clamp(state.attackT,0,1);
+    // windup (0-0.35) -> strike (0.35-0.7) -> recover (0.7-1)
+    let sw;
+    if (t<0.35) sw = -(t/0.35);            // wind up (negative = back/up)
+    else if (t<0.7) sw = (t-0.35)/0.35;    // strike forward 0..1
+    else sw = 1-((t-0.7)/0.3);             // recover back to 0
+    weaponSwing = sw;
+    const big = state.attackKind==='heavy' ? 1.4:1.0;
+    rHandTgt = V3.add(rightShoulder, {x:0.10*P.H, y:0.10*P.H - 0.30*P.H*Math.max(sw,0) + 0.20*P.H*Math.max(-sw,0), z:-0.10*P.H - 0.55*P.H*big*Math.max(sw,0) + 0.15*P.H*Math.max(-sw,0)});
+    lHandTgt = V3.add(leftShoulder, {x:-0.05*P.H, y:-0.05*P.H, z:0.10*P.H});
+  } else if (state.deathT!=null){
+    rHandTgt = V3.add(rightShoulder, {x:0.15*P.H, y:-0.25*P.H, z:0.05*P.H});
+    lHandTgt = V3.add(leftShoulder,  {x:-0.15*P.H, y:-0.25*P.H, z:0.05*P.H});
+  } else {
+    const swF = state.moving? Math.sin(state.phase*2*Math.PI) : Math.sin(idle*1.4)*0.15;
+    rHandTgt = V3.add(rightShoulder, {x:0.03*P.H, y:-P.upperArm-P.foreArm*0.55, z:-swF*0.18*P.H});
+    lHandTgt = V3.add(leftShoulder,  {x:-0.03*P.H, y:-P.upperArm-P.foreArm*0.55, z: swF*0.18*P.H});
+  }
+
+  const lArm = twoBoneIK(leftShoulder,  lHandTgt, P.upperArm, P.foreArm, -1, {x:0,y:0,z:-1});
+  const rArm = twoBoneIK(rightShoulder, rHandTgt, P.upperArm, P.foreArm, -1, {x:0,y:0,z:-1});
+
+  return {
+    hipsC, leftHip, rightHip,
+    leftKnee:lLeg.mid, leftFoot:lLeg.end, rightKnee:rLeg.mid, rightFoot:rLeg.end,
+    shouldersC, neckTop, headC, leftShoulder, rightShoulder,
+    leftElbow:lArm.mid, leftHand:lArm.end, rightElbow:rArm.mid, rightHand:rArm.end,
+    weaponSwing,
+  };
+}
+
+// ============================================================ RENDERING ===
+function rotateY(p, a){
+  const c=Math.cos(a), s=Math.sin(a);
+  return { x: p.x*c - p.z*s, y: p.y, z: p.x*s + p.z*c };
+}
+
+const canvas = document.getElementById('game');
+const ctx = canvas.getContext('2d');
+let DPR = Math.min(window.devicePixelRatio||1, 2);
+function resize(){
+  DPR = Math.min(window.devicePixelRatio||1, 2);
+  canvas.width = Math.floor(innerWidth*DPR);
+  canvas.height = Math.floor(innerHeight*DPR);
+  canvas.style.width = innerWidth+'px';
+  canvas.style.height = innerHeight+'px';
+}
+window.addEventListener('resize', resize);
+resize();
+
+const cam = {x:0, z:0, scale: 44};
+function screenCenter(){ return {x: canvas.width/2, y: canvas.height*0.42}; }
+
+function projectIso(world){
+  const sc = screenCenter();
+  const relX = world.x - cam.x, relZ = world.z - cam.z, y = world.y;
+  const k = cam.scale*DPR;
+  const sx = (relX - relZ)*k + sc.x;
+  const sy = (relX + relZ)*k*0.5 - y*k + sc.y;
+  const depth = relX + relZ + y*0.01;
+  return {x:sx, y:sy, depth};
+}
+function unprojectGround(sx, sy){
+  const sc = screenCenter();
+  const k = cam.scale*DPR;
+  const A = (sx - sc.x)/k;
+  const B = (sy - sc.y)/(k*0.5);
+  const relX = (A+B)/2, relZ = (B-A)/2;
+  return {x: relX+cam.x, z: relZ+cam.z};
+}
+
+function drawCapsule(p1, p2, r, color){
+  const a = projectIso(p1), b = projectIso(p2);
+  const rr = Math.max(1.4, r*cam.scale*DPR);
+  ctx.strokeStyle = color; ctx.lineWidth = rr*2; ctx.lineCap='round';
+  ctx.beginPath(); ctx.moveTo(a.x,a.y); ctx.lineTo(b.x,b.y); ctx.stroke();
+  return (a.depth+b.depth)/2;
+}
+
+function buildBoneList(pose, P, palette, facing, originWorld){
+  const toWorld = (p)=> V3.add(rotateY(p, facing), originWorld);
+  const j = {}; for (const k in pose){ if (k!=='weaponSwing') j[k]=toWorld(pose[k]); }
+  const skin = palette.skin, cloth = palette.cloth, dark = palette.dark;
+  const bulk = palette.armorBulk || 1;
+  const list = [
+    {a:j.rightShoulder, b:j.rightElbow, r:P.limbR*0.95*bulk, c:cloth},
+    {a:j.rightElbow, b:j.rightHand, r:P.limbR*0.8, c:skin},
+    {a:j.leftShoulder, b:j.leftElbow, r:P.limbR*0.95*bulk, c:cloth},
+    {a:j.leftElbow, b:j.leftHand, r:P.limbR*0.8, c:skin},
+    {a:j.shouldersC, b:j.hipsC, r:P.torsoR*bulk, c:cloth,
+     glow: !!palette.armorGlow, glowColor: cloth},
+    {a:j.rightHip, b:j.rightKnee, r:P.limbR*1.05*bulk, c:dark},
+    {a:j.rightKnee, b:j.rightFoot, r:P.limbR*0.85, c:dark},
+    {a:j.leftHip, b:j.leftKnee, r:P.limbR*1.05*bulk, c:dark},
+    {a:j.leftKnee, b:j.leftFoot, r:P.limbR*0.85, c:dark},
+    {a:j.neckTop, b:j.headC, r:P.limbR*0.7, c:skin},
+  ];
+
+  const weaponType = palette.weaponType||'melee';
+  if (weaponType === 'bow'){
+    // bow prop cradled in the off-hand: a gentle 3-segment recurve arc
+    const base = j.leftHand;
+    const sideDir = rotateY({x:1,y:0,z:0}, facing);
+    const up   = {x:base.x, y:base.y+P.H*0.34, z:base.z};
+    const down = {x:base.x, y:base.y-P.H*0.34, z:base.z};
+    const mid1 = V3.add(base, V3.add({x:0,y:P.H*0.13,z:0}, V3.scale(sideDir, P.H*0.10)));
+    const mid2 = V3.add(base, V3.add({x:0,y:-P.H*0.13,z:0}, V3.scale(sideDir, P.H*0.10)));
+    const glow = !!palette.weaponGlow;
+    list.push({a:up, b:mid1, r:P.limbR*0.32, c:palette.weapon, glow, glowColor:palette.weapon});
+    list.push({a:mid1, b:mid2, r:P.limbR*0.36, c:palette.weapon, glow, glowColor:palette.weapon});
+    list.push({a:mid2, b:down, r:P.limbR*0.32, c:palette.weapon, glow, glowColor:palette.weapon});
+  } else {
+    const armDir = V3.norm(V3.sub(j.rightHand, j.rightElbow));
+    const bladeLen = (palette.bladeLen!=null ? palette.bladeLen : 0.42);
+    const tip = V3.add(j.rightHand, V3.scale(armDir, P.H*bladeLen));
+    list.push({a:j.rightHand, b:tip, r:P.limbR*0.32, c:palette.weapon,
+               glow:!!palette.weaponGlow, glowColor:palette.weapon});
+  }
+
+  if (palette.shieldColor && palette.shieldSize>0){
+    const sPos = j.leftHand;
+    const sTop = V3.add(sPos, {x:0,y:P.H*palette.shieldSize*0.5,z:0.02});
+    const sBot = V3.add(sPos, {x:0,y:-P.H*palette.shieldSize*0.5,z:0.02});
+    list.push({a:sTop, b:sBot, r:P.H*palette.shieldSize*0.30, c:palette.shieldColor,
+               glow:!!palette.shieldGlow, glowColor:palette.shieldColor});
+  }
+
+  return {list, j};
+}
+
+function drawHumanoid(pose, P, palette, facing, originWorld){
+  const {list, j} = buildBoneList(pose, P, palette, facing, originWorld);
+  const withDepth = list.map(seg=>{
+    const da = projectIso(seg.a).depth, db = projectIso(seg.b).depth;
+    return {...seg, depth:(da+db)/2};
+  });
+  withDepth.sort((s1,s2)=>s1.depth - s2.depth);
+  // insert head (as a circle) at appropriate slot by depth
+  const headDepth = projectIso(j.headC).depth;
+  let inserted=false;
+  for (let i=0;i<withDepth.length;i++){
+    const seg = withDepth[i];
+    if (seg.glow){ ctx.save(); ctx.shadowColor = seg.glowColor||seg.c; ctx.shadowBlur = 9*DPR; }
+    drawCapsule(seg.a, seg.b, seg.r, seg.c);
+    if (seg.glow){ ctx.restore(); }
+    if (!inserted && headDepth <= seg.depth){
+      drawHead(j.headC, P, palette); inserted=true;
+    }
+  }
+  if (!inserted) drawHead(j.headC, P, palette);
+}
+function drawHead(headWorld, P, palette){
+  const s = projectIso(headWorld);
+  const r = Math.max(2, P.headR*cam.scale*DPR);
+  const g = ctx.createRadialGradient(s.x-r*0.3,s.y-r*0.35,r*0.15, s.x,s.y,r);
+  g.addColorStop(0, palette.headHi||'#f0d3ac');
+  g.addColorStop(1, palette.skin);
+  ctx.fillStyle=g; ctx.beginPath(); ctx.arc(s.x,s.y,r,0,Math.PI*2); ctx.fill();
+  if (palette.eyeGlow){
+    ctx.fillStyle = palette.eyeGlow;
+    ctx.shadowColor = palette.eyeGlow; ctx.shadowBlur = 6*DPR;
+    ctx.beginPath(); ctx.arc(s.x-r*0.28, s.y-r*0.05, r*0.13, 0, Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.arc(s.x+r*0.28, s.y-r*0.05, r*0.13, 0, Math.PI*2); ctx.fill();
+    ctx.shadowBlur = 0;
+  }
+}
+function drawShadow(pos, radiusM, alpha){
+  const s = projectIso({x:pos.x,y:0,z:pos.z});
+  const rx = radiusM*cam.scale*DPR, ry = rx*0.45;
+  ctx.fillStyle = `rgba(0,0,0,${alpha})`;
+  ctx.beginPath(); ctx.ellipse(s.x,s.y,rx,ry,0,0,Math.PI*2); ctx.fill();
+}
+
+// ============================================================ ENVIRONMENT =
+let ARENA_R = 18;
+let pillars = [], torches = [];
+function buildArena(){
+  pillars = []; torches = [];
+  const count = Math.max(7, Math.round(ARENA_R*0.62));
+  for (let i=0;i<count;i++){
+    const a = i/count*Math.PI*2 + 0.35;
+    const p = {x:Math.cos(a)*(ARENA_R-1.3), z:Math.sin(a)*(ARENA_R-1.3)};
+    pillars.push(p);
+    if (i%2===0) torches.push({x:p.x*0.94, z:p.z*0.94, seed:Math.random()*100});
+  }
+}
+buildArena();
+
+function drawBackground(){
+  const g = ctx.createRadialGradient(canvas.width/2,canvas.height*0.38,canvas.height*0.15,
+                                      canvas.width/2,canvas.height*0.5,canvas.height*0.95);
+  g.addColorStop(0,'#241a16'); g.addColorStop(0.55,'#0e0a0a'); g.addColorStop(1,'#000000');
+  ctx.fillStyle=g; ctx.fillRect(0,0,canvas.width,canvas.height);
+}
+
+function drawFloor(t){
+  const N=64; ctx.save();
+  ctx.beginPath();
+  for (let i=0;i<=N;i++){
+    const a = i/N*Math.PI*2;
+    const p = projectIso({x:Math.cos(a)*ARENA_R, y:0, z:Math.sin(a)*ARENA_R});
+    if (i===0) ctx.moveTo(p.x,p.y); else ctx.lineTo(p.x,p.y);
+  }
+  ctx.closePath();
+  const centerS = projectIso({x:cam.x,y:0,z:cam.z});
+  const fg = ctx.createRadialGradient(centerS.x,centerS.y,10, centerS.x,centerS.y, ARENA_R*cam.scale*DPR);
+  fg.addColorStop(0,'#3a332c'); fg.addColorStop(0.6,'#26211d'); fg.addColorStop(1,'#120f0d');
+  ctx.fillStyle = fg; ctx.fill();
+  ctx.clip();
+  ctx.strokeStyle='rgba(0,0,0,0.35)'; ctx.lineWidth=Math.max(1,1*DPR);
+  const step=1.2, R=ARENA_R;
+  for (let gx=-R; gx<=R; gx+=step){
+    const p1=projectIso({x:gx,y:0,z:-R}), p2=projectIso({x:gx,y:0,z:R});
+    ctx.beginPath(); ctx.moveTo(p1.x,p1.y); ctx.lineTo(p2.x,p2.y); ctx.stroke();
+  }
+  for (let gz=-R; gz<=R; gz+=step){
+    const p1=projectIso({x:-R,y:0,z:gz}), p2=projectIso({x:R,y:0,z:gz});
+    ctx.beginPath(); ctx.moveTo(p1.x,p1.y); ctx.lineTo(p2.x,p2.y); ctx.stroke();
+  }
+  // subtle cracks
+  ctx.restore();
+}
+
+function drawTorchGlow(t){
+  ctx.save(); ctx.globalCompositeOperation='lighter';
+  for (const tr of torches){
+    const flick = 0.75+0.25*Math.sin(t*9+tr.seed)+0.08*Math.sin(t*23+tr.seed*2);
+    const s = projectIso({x:tr.x,y:1.35,z:tr.z});
+    const rad = (2.6+0.3*flick)*cam.scale*DPR;
+    const g = ctx.createRadialGradient(s.x,s.y,0, s.x,s.y,rad);
+    g.addColorStop(0, `rgba(255,150,60,${0.30*flick})`);
+    g.addColorStop(1, 'rgba(255,120,40,0)');
+    ctx.fillStyle=g; ctx.beginPath(); ctx.arc(s.x,s.y,rad,0,Math.PI*2); ctx.fill();
+  }
+  ctx.restore();
+}
+function drawPillar(p){
+  const base={x:p.x,y:0,z:p.z}, top={x:p.x,y:3.0,z:p.z};
+  drawShadow(p, 0.9, 0.35);
+  drawCapsule(base, top, 0.42, '#4a433c');
+  const capTop = projectIso({x:p.x,y:3.15,z:p.z});
+  ctx.fillStyle='#5c534a'; ctx.beginPath(); ctx.ellipse(capTop.x,capTop.y, 0.55*cam.scale*DPR,0.30*cam.scale*DPR,0,0,Math.PI*2); ctx.fill();
+}
+function drawTorchStick(tr){
+  drawCapsule({x:tr.x,y:0.9,z:tr.z},{x:tr.x,y:1.5,z:tr.z}, 0.05, '#2a1c10');
+  const s = projectIso({x:tr.x,y:1.6,z:tr.z});
+  const flick = 0.8+0.2*Math.sin(perfNow*9+tr.seed);
+  const g = ctx.createRadialGradient(s.x,s.y,0,s.x,s.y, 14*DPR*flick);
+  g.addColorStop(0,'#fff3c0'); g.addColorStop(0.4,'#ff9a3c'); g.addColorStop(1,'rgba(255,80,20,0)');
+  ctx.fillStyle=g; ctx.beginPath(); ctx.arc(s.x,s.y,14*DPR*flick,0,Math.PI*2); ctx.fill();
+}
+
+function drawStairs(){
+  if (!world.stairs) return;
+  const {x,z} = world.stairs;
+  const t = perfNow;
+  ctx.save(); ctx.globalCompositeOperation='lighter';
+  // ground portal ring
+  const s = projectIso({x,y:0.02,z});
+  for (let ring=0; ring<3; ring++){
+    const rad = (1.1 + ring*0.35 + 0.08*Math.sin(t*2+ring)) * cam.scale * DPR;
+    const g = ctx.createRadialGradient(s.x,s.y,rad*0.4, s.x,s.y,rad);
+    g.addColorStop(0, 'rgba(140,90,255,0.22)');
+    g.addColorStop(1, 'rgba(90,40,200,0)');
+    ctx.fillStyle=g; ctx.beginPath(); ctx.ellipse(s.x,s.y,rad,rad*0.5,0,0,Math.PI*2); ctx.fill();
+  }
+  // rising light beam
+  const beamTop = projectIso({x,y:2.6,z});
+  ctx.strokeStyle = 'rgba(170,120,255,0.5)'; ctx.lineWidth = 10*DPR; ctx.lineCap='round';
+  ctx.beginPath(); ctx.moveTo(s.x,s.y); ctx.lineTo(beamTop.x,beamTop.y); ctx.stroke();
+  ctx.restore();
+  drawShadow({x,z}, 1.3, 0.3);
+}
+
+// ambient dust
+const dust = [];
+for (let i=0;i<26;i++){
+  dust.push({x:(Math.random()*2-1)*ARENA_R*0.9, z:(Math.random()*2-1)*ARENA_R*0.9,
+             y:Math.random()*2.2, vy:0.12+Math.random()*0.12, size:1+Math.random()*1.8,
+             alpha:0.08+Math.random()*0.12});
+}
+function updateDrawDust(dt){
+  ctx.save();
+  for (const d of dust){
+    d.y += d.vy*dt; if (d.y>2.4){ d.y=0; d.x=(Math.random()*2-1)*ARENA_R*0.9; d.z=(Math.random()*2-1)*ARENA_R*0.9; }
+    const s = projectIso({x:d.x,y:d.y,z:d.z});
+    ctx.fillStyle = `rgba(220,210,190,${d.alpha})`;
+    ctx.beginPath(); ctx.arc(s.x,s.y,d.size*DPR,0,Math.PI*2); ctx.fill();
+  }
+  ctx.restore();
+}
+
+// ============================================================ FX ==========
+const particles = [];
+function spawnBurst(pos, color, count, speed){
+  for (let i=0;i<count;i++){
+    const ang = Math.random()*Math.PI*2;
+    const up = Math.random()*0.6+0.2;
+    particles.push({
+      x:pos.x, y:pos.y!=null?pos.y:1.0, z:pos.z,
+      vx:Math.cos(ang)*speed*(0.4+Math.random()*0.6),
+      vz:Math.sin(ang)*speed*(0.4+Math.random()*0.6),
+      vy: up*speed, life:0.45+Math.random()*0.25, maxLife:0.7, color,
+      size: 2+Math.random()*2.4
+    });
+  }
+}
+function updateDrawParticles(dt){
+  ctx.save(); ctx.globalCompositeOperation='lighter';
+  for (let i=particles.length-1;i>=0;i--){
+    const p = particles[i];
+    p.life -= dt; if (p.life<=0){ particles.splice(i,1); continue; }
+    p.x += p.vx*dt; p.z += p.vz*dt; p.y += p.vy*dt; p.vy -= dt*1.6; p.vx*=0.92; p.vz*=0.92;
+    const s = projectIso({x:p.x,y:Math.max(p.y,0),z:p.z});
+    const a = clamp(p.life/p.maxLife,0,1);
+    ctx.fillStyle = p.color.replace('ALPHA', a.toFixed(3));
+    ctx.beginPath(); ctx.arc(s.x,s.y, p.size*DPR*a+1, 0, Math.PI*2); ctx.fill();
+  }
+  ctx.restore();
+}
+
+const dmgNumbers = [];
+function spawnDamageNumber(pos, text, color){
+  dmgNumbers.push({x:pos.x,y:(pos.y!=null?pos.y:1.6),z:pos.z, text, color,
+    vy:1.1, life:0.9, maxLife:0.9, jitter:(Math.random()*0.3-0.15)});
+}
+function updateDrawDamageNumbers(dt){
+  ctx.save(); ctx.textAlign='center'; ctx.font=`bold ${Math.round(15*DPR)}px sans-serif`;
+  for (let i=dmgNumbers.length-1;i>=0;i--){
+    const d = dmgNumbers[i];
+    d.life -= dt; if (d.life<=0){ dmgNumbers.splice(i,1); continue; }
+    d.y += d.vy*dt; d.vy *= 0.94;
+    const s = projectIso({x:d.x+d.jitter, y:d.y, z:d.z});
+    const a = clamp(d.life/d.maxLife,0,1);
+    ctx.lineWidth=3*DPR; ctx.strokeStyle=`rgba(0,0,0,${a*0.8})`;
+    ctx.strokeText(d.text, s.x, s.y);
+    ctx.fillStyle = d.color.replace('ALPHA', a.toFixed(3));
+    ctx.fillText(d.text, s.x, s.y);
+  }
+  ctx.restore();
+}
+
+let shakeTime=0, shakeMag=0;
+function addShake(mag, dur){ shakeMag=Math.max(shakeMag,mag); shakeTime=Math.max(shakeTime,dur); }
+
+// ============================================================ ARROWS =====
+const arrows = [];
+function spawnArrow(x,z,dx,dz,speed,dmg,hitColor,fromPlayer,heavy){
+  arrows.push({x, y:1.15, z, dx, dz, speed, dmg, hitColor, fromPlayer, heavy,
+               life:0, maxLife:3.0, pierced: new Set()});
+}
+function updateDrawArrows(dt){
+  for (let i=arrows.length-1; i>=0; i--){
+    const a = arrows[i];
+    a.life += dt;
+    a.x += a.dx*a.speed*dt;
+    a.z += a.dz*a.speed*dt;
+    let remove = false;
+    if (a.life > a.maxLife || Math.hypot(a.x,a.z) > ARENA_R+1.5) remove = true;
+
+    if (!remove){
+      if (a.fromPlayer){
+        for (const e of world.enemies){
+          if (e.dead || a.pierced.has(e)) continue;
+          const d = Math.hypot(e.pos.x-a.x, e.pos.z-a.z);
+          if (d < 0.55){
+            e.takeDamage(a.dmg, true);
+            spawnBurst({x:e.pos.x,y:1.1,z:e.pos.z}, a.hitColor, a.heavy?14:8, a.heavy?2.6:1.8);
+            world.player.fury = Math.min(world.player.maxFury, world.player.fury + (a.heavy?0:10));
+            addShake(a.heavy?4:1.5, 0.08);
+            if (a.heavy){ a.pierced.add(e); } else { remove = true; break; }
+          }
+        }
+      } else if (!world.player.dead) {
+        const p = world.player;
+        const d = Math.hypot(p.pos.x-a.x, p.pos.z-a.z);
+        if (d < 0.5){ p.takeDamage(a.dmg, false); remove = true; }
+      }
+    }
+
+    if (remove){ arrows.splice(i,1); continue; }
+
+    const tail = {x:a.x-a.dx*0.32, y:a.y, z:a.z-a.dz*0.32};
+    const head = {x:a.x+a.dx*0.14, y:a.y, z:a.z+a.dz*0.14};
+    drawCapsule(tail, head, 0.035, a.hitColor.replace('ALPHA','0.9'));
+  }
+}
+
+function drawHPBar(entity){
+  if (entity.hp>=entity.maxHp && entity.dead!==true && entity._neverHit) return;
+  const headPos = rotateY(entity.getPose().headC, entity.facing);
+  const world = V3.add(headPos, {x:entity.pos.x,y:0.32,z:entity.pos.z});
+  const s = projectIso(world);
+  const w = 44*DPR, h=5*DPR;
+  const pct = clamp(entity.hp/entity.maxHp,0,1);
+  ctx.fillStyle='rgba(0,0,0,0.55)'; ctx.fillRect(s.x-w/2-1,s.y-h/2-1,w+2,h+2);
+  ctx.fillStyle = entity.isPlayer? '#5ac25a' : '#c23c3c';
+  ctx.fillRect(s.x-w/2, s.y-h/2, w*pct, h);
+}
+
+// ============================================================ ITEMS ======
+const WEAPONS = [
+  { id:'rusty',   name:'錆びた剣 (Rusty Sword)', price:0, type:'melee',
+    dmgMult:1.00, spdMult:1.00, rangeMult:1.00, bladeLen:0.42,
+    color:'#948a6e', hitColor:'rgba(255,200,80,ALPHA)',
+    desc:'最初から持っている、使い古された片手剣。', c1:'#6b6350', c2:'#9c927a' },
+  { id:'iron',    name:'アイアンロングソード', price:490, type:'melee',
+    dmgMult:1.35, spdMult:1.00, rangeMult:1.18, bladeLen:0.54,
+    color:'#d7dee3', hitColor:'rgba(255,230,150,ALPHA)',
+    desc:'長く鋭い刀身。間合いとダメージが向上する。', c1:'#7d8891', c2:'#dfe6ea' },
+  { id:'daggers', name:'ツインダガー', price:780, type:'melee',
+    dmgMult:0.62, spdMult:1.70, rangeMult:0.72, bladeLen:0.22,
+    color:'#a7e0ff', hitColor:'rgba(150,225,255,ALPHA)',
+    desc:'手数で攻める高速二刀流。一撃は軽いが超高速。', c1:'#2c6f8a', c2:'#a7e0ff' },
+  { id:'hammer',  name:'ウォーハンマー', price:980, type:'melee',
+    dmgMult:2.05, spdMult:0.58, rangeMult:1.30, bladeLen:0.30, knockback:true,
+    color:'#8a6a44', hitColor:'rgba(255,150,60,ALPHA)',
+    desc:'重厚な一撃で敵をノックバックさせる大槌。', c1:'#4a3520', c2:'#a47a4c' },
+  { id:'cleaver', name:'デーモンクリーバー', price:1980, type:'melee',
+    dmgMult:1.85, spdMult:0.88, rangeMult:1.25, bladeLen:0.62,
+    color:'#ff6a44', hitColor:'rgba(255,90,40,ALPHA)',
+    desc:'業火を纏う伝説の大剣。TGS限定デモアイテム。', c1:'#7a1a10', c2:'#ff8a4a' },
+  { id:'shortbow',name:'ショートボウ', price:650, type:'bow',
+    dmgMult:0.95, spdMult:1.05, rangeMult:1.0, bowRange:7.5, arrowSpeed:15,
+    color:'#8a6a3a', hitColor:'rgba(180,255,140,ALPHA)',
+    desc:'取り回しの良い小型の弓。中距離から矢を放つ。', c1:'#5a4020', c2:'#a9884e' },
+  { id:'longbow', name:'ロングボウ', price:1450, type:'bow',
+    dmgMult:1.55, spdMult:0.75, rangeMult:1.0, bowRange:9.5, arrowSpeed:18,
+    color:'#5a4a34', hitColor:'rgba(140,255,200,ALPHA)',
+    desc:'狙いに時間がかかるが高威力・長射程の弓。', c1:'#3a2c18', c2:'#8a6a3e' },
+  { id:'excalibur', name:'エクスカリバー', price:99800, type:'melee', legendary:true,
+    dmgMult:3.2, spdMult:1.15, rangeMult:1.4, bladeLen:0.68, glow:true,
+    color:'#fff6c8', hitColor:'rgba(255,250,190,ALPHA)',
+    desc:'伝説の聖剣。すべてを凌駕する究極の一振り。TGS特別価格。', c1:'#8a7a2a', c2:'#fff6c8' },
+];
+const ARMORS = [
+  { id:'cloth',  name:'布の服', price:0, defense:0.00, speedMult:1.00,
+    cloth:'#3b4b52', dark:'#242b2e', bulk:1.00,
+    desc:'最初から着ている旅装束。防御力はほぼ無い。', c1:'#2c383d', c2:'#4a5c64' },
+  { id:'leather',name:'レザーアーマー', price:500, defense:0.12, speedMult:1.00,
+    cloth:'#5a4326', dark:'#3a2c18', bulk:1.04,
+    desc:'軽量な革鎧。動きを妨げずに軽い防御力を得る。', c1:'#3a2c18', c2:'#8a6a3e' },
+  { id:'chain',  name:'チェインメイル', price:1100, defense:0.22, speedMult:0.98,
+    cloth:'#6b7278', dark:'#40454a', bulk:1.10,
+    desc:'鎖帷子。斬撃への耐性が向上する。', c1:'#4a5054', c2:'#9aa2a8' },
+  { id:'plate',  name:'プレートアーマー', price:2200, defense:0.35, speedMult:0.93,
+    cloth:'#8a9099', dark:'#4a4e54', bulk:1.20,
+    desc:'重厚な全身鎧。防御力は高いが機動力が落ちる。', c1:'#5a6066', c2:'#c8d0d8' },
+  { id:'dragon', name:'ドラゴンスケイルメイル', price:45000, defense:0.55, speedMult:1.00, legendary:true,
+    cloth:'#8a1a1a', dark:'#4a0e0e', bulk:1.15, glow:true,
+    desc:'竜の鱗から鍛えた伝説の鎧。炎耐性と圧倒的な防御力。', c1:'#5a0e0e', c2:'#ff5a3c' },
+];
+const SHIELDS = [
+  { id:'none',   name:'盾なし', price:0, block:0.00, size:0,
+    desc:'両手武器や身軽さを優先し、盾を持たない。', c1:'#222', c2:'#333' },
+  { id:'wooden', name:'木の盾', price:420, block:0.10, size:0.30,
+    color:'#7a5a34', rim:'#4a3520',
+    desc:'素朴な木製の盾。低確率で攻撃を防ぐ。', c1:'#4a3520', c2:'#9a7a4e' },
+  { id:'iron_shield', name:'アイアンシールド', price:900, block:0.20, size:0.34,
+    color:'#9aa0a6', rim:'#5a6066',
+    desc:'鉄製の丸盾。安定したブロック性能を持つ。', c1:'#5a6066', c2:'#c8d0d8' },
+  { id:'tower',  name:'タワーシールド', price:1800, block:0.32, size:0.42,
+    color:'#6a7480', rim:'#3a4048',
+    desc:'大型の盾。高いブロック率で身を守る。', c1:'#3a4048', c2:'#9aa8b8' },
+  { id:'aegis',  name:'イージスの盾', price:38000, block:0.55, size:0.40, legendary:true,
+    color:'#4ac8ff', rim:'#0a5a8a', glow:true,
+    desc:'女神の加護が宿る伝説の盾。驚異的な防御性能。TGS特別価格。', c1:'#0a5a8a', c2:'#8ae8ff' },
+];
+const ITEM_SETS = { weapon: WEAPONS, armor: ARMORS, shield: SHIELDS };
+function getItem(category, id){
+  const set = ITEM_SETS[category];
+  return (set && set.find(it=>it.id===id)) || set[0];
+}
+const DEFAULT_EQUIPPED = { weapon:'rusty', armor:'cloth', shield:'none' };
+
+function loadSave(){
+  try {
+    const raw = localStorage.getItem('demonsHollowSave');
+    if (!raw) return null;
+    const data = JSON.parse(raw);
+    if (!data) return null;
+    // migrate old single-weapon save format
+    if (Array.isArray(data.unlocked)){
+      return {
+        owned:{ weapon:data.unlocked, armor:['cloth'], shield:['none'] },
+        equipped:{ weapon:data.equipped||'rusty', armor:'cloth', shield:'none' },
+      };
+    }
+    if (data.owned && data.equipped) return data;
+    return null;
+  } catch(e){ return null; }
+}
+function writeSave(owned, equipped){
+  try {
+    localStorage.setItem('demonsHollowSave', JSON.stringify({owned, equipped}));
+  } catch(e){ /* localStorage unavailable (e.g. sandboxed file://) -- fail silently */ }
+}
+
+// ============================================================ ENTITIES ====
+class Character {
+  constructor(x,z,P,palette){
+    this.pos = {x,z}; this.facing = Math.PI;
+    this.P = P; this.palette = palette;
+    this.phase = Math.random(); this.idleT = Math.random()*10;
+    this.moving = false; this.speed01 = 0;
+    this.attackT = null; this.attackKind='light'; this.hasAppliedHit=false;
+    this.attackDuration = 0.5; this.attackCooldownTimer = 0; this.attackCooldownMax = 0.3;
+    this.hitT = null; this.deathT = null; this.dead = false; this.removeAfter=null;
+    this.stepLen = 1.05; this._neverHit = true;
+    this.weaponSpdMult = 1;
+  }
+  moveStep(dt, vx, vz){
+    const spd = Math.hypot(vx,vz);
+    if (spd > 0.02){
+      this.pos.x += vx*dt; this.pos.z += vz*dt;
+      this.facing = Math.atan2(vx, -vz);
+      this.phase = (this.phase + dt*(spd/this.stepLen)) % 1;
+      this.moving = true; this.speed01 = clamp(spd/(this.speed||3),0,1);
+    } else {
+      this.moving = false; this.speed01 = 0;
+    }
+  }
+  faceToward(tx,tz){
+    const dx=tx-this.pos.x, dz=tz-this.pos.z;
+    if (Math.hypot(dx,dz)>0.001) this.facing = Math.atan2(dx,-dz);
+  }
+  startAttack(kind){
+    this.attackT = 0; this.attackKind = kind||'light'; this.hasAppliedHit=false;
+    const base = kind==='heavy' ? 0.62 : 0.46;
+    this.attackDuration = base / (this.weaponSpdMult||1);
+  }
+  takeDamage(n, sourceIsPlayer){
+    if (this.dead) return;
+    this._neverHit = false;
+    this.hp = Math.max(0, this.hp-n);
+    spawnDamageNumber({x:this.pos.x,z:this.pos.z}, Math.round(n).toString(),
+      sourceIsPlayer? 'rgba(255,220,90,ALPHA)':'rgba(255,90,90,ALPHA)');
+    if (this.hp<=0){ this.die(); }
+    else { this.hitT = 0; }
+  }
+  die(){
+    this.dead = true; this.deathT = 0; this.attackT=null; this.hitT=null;
+    spawnBurst({x:this.pos.x,y:1.0,z:this.pos.z}, 'rgba(180,140,255,ALPHA)', 16, 2.6);
+  }
+  tick(dt){
+    this.idleT += dt;
+    if (this.deathT!=null){ this.deathT = Math.min(1,this.deathT+dt/0.9); return; }
+    if (this.hitT!=null){ this.hitT += dt/0.35; if (this.hitT>=1) this.hitT=null; }
+    if (this.attackT!=null){
+      this.attackT += dt/this.attackDuration;
+      if (!this.hasAppliedHit && this.attackT>=0.48){ this.hasAppliedHit=true; this.onAttackHitFrame(); }
+      if (this.attackT>=1){ this.attackT=null; this.hasAppliedHit=false; this.attackCooldownTimer=this.attackCooldownMax; }
+    } else if (this.attackCooldownTimer>0){ this.attackCooldownTimer -= dt; }
+  }
+  getPose(){
+    return buildPose(this.P, {
+      phase:this.phase, moving:this.moving && this.attackT==null && this.deathT==null,
+      speed01:this.speed01, attackT:this.attackT, attackKind:this.attackKind,
+      hitT:this.hitT, deathT:this.deathT, idleT:this.idleT, facing:this.facing
+    });
+  }
+  render(){
+    const alive = this.deathT==null || this.deathT<1;
+    if (!alive) return;
+    const shadowA = 0.38*(this.deathT!=null? (1-this.deathT):1);
+    drawShadow({x:this.pos.x,z:this.pos.z}, 0.5, shadowA);
+    const pose = this.getPose();
+    drawHumanoid(pose, this.P, this.palette, this.facing, {x:this.pos.x,y:0,z:this.pos.z});
+    if (!this.dead && !this.isPlayer) drawHPBar(this);
+  }
+}
+
+class Player extends Character {
+  constructor(x,z){
+    const P = makeProportions(1.78, 1.0);
+    const palette = {skin:'#caa06f', headHi:'#e9c79a', cloth:'#3b4b52', dark:'#242b2e',
+                      weapon:'#c9c9c9', bladeLen:0.42, weaponType:'melee'};
+    super(x,z,P,palette);
+    this.isPlayer = true;
+    this.maxHp = 100; this.hp = 100;
+    this.baseSpeed = 3.3; this.speed = 3.3; this.attackRange = 1.55;
+    this.fury = 0; this.maxFury=100;
+    this.maxLives = 10; this.lives = 10; this.invulnT = 0;
+    this.moveTarget = null; this.attackTarget = null; this.heavyQueued=false;
+    this._neverHit = false;
+
+    const saved = loadSave();
+    const so = (saved && saved.owned) || {};
+    this.owned = {
+      weapon: new Set(so.weapon && so.weapon.length ? so.weapon : ['rusty']),
+      armor:  new Set(so.armor  && so.armor.length  ? so.armor  : ['cloth']),
+      shield: new Set(so.shield && so.shield.length ? so.shield : ['none']),
+    };
+    this.equipped = {weapon:'rusty', armor:'cloth', shield:'none'};
+    const eq = (saved && saved.equipped) || {};
+    this.equipItem('weapon', this.owned.weapon.has(eq.weapon) ? eq.weapon : 'rusty', true);
+    this.equipItem('armor',  this.owned.armor.has(eq.armor)   ? eq.armor  : 'cloth', true);
+    this.equipItem('shield', this.owned.shield.has(eq.shield) ? eq.shield : 'none', true);
+  }
+  equipItem(category, id, skipSave){
+    const it = getItem(category, id);
+    if (!this.owned[category].has(it.id)) return false;
+    this.equipped[category] = it.id;
+    if (category==='weapon'){
+      this.weaponId = it.id;
+      this.weaponDmgMult = it.dmgMult;
+      this.weaponSpdMult = it.spdMult;
+      this.weaponRangeMult = it.rangeMult;
+      this.weaponKnockback = !!it.knockback;
+      this.palette.weapon = it.color;
+      this.palette.bladeLen = it.bladeLen;
+      this.palette.weaponType = it.type;
+      this.palette.weaponGlow = !!it.glow;
+    } else if (category==='armor'){
+      this.armorId = it.id;
+      this.palette.cloth = it.cloth;
+      this.palette.dark = it.dark;
+      this.palette.armorBulk = it.bulk;
+      this.palette.armorGlow = !!it.glow;
+      this.speed = this.baseSpeed * (it.speedMult!=null?it.speedMult:1);
+    } else if (category==='shield'){
+      this.shieldId = it.id;
+      this.palette.shieldColor = it.color || null;
+      this.palette.shieldSize = it.size || 0;
+      this.palette.shieldGlow = !!it.glow;
+    }
+    if (!skipSave) this._save();
+    return true;
+  }
+  purchaseItem(category, id){
+    const it = getItem(category, id);
+    if (this.owned[category].has(it.id)) return false;
+    this.owned[category].add(it.id);
+    this.equipItem(category, it.id);
+    return true;
+  }
+  _save(){
+    writeSave(
+      {weapon:Array.from(this.owned.weapon), armor:Array.from(this.owned.armor), shield:Array.from(this.owned.shield)},
+      {weapon:this.weaponId, armor:this.armorId, shield:this.shieldId}
+    );
+  }
+  takeDamage(n, sourceIsPlayer){
+    if (this.dead || this.invulnT>0) return;
+    const shield = getItem('shield', this.shieldId);
+    const armor = getItem('armor', this.armorId);
+    let dmg = n;
+    let blocked = false;
+    if (shield.block>0 && Math.random() < shield.block){
+      dmg *= 0.30; blocked = true;
+    }
+    dmg *= (1 - (armor.defense||0));
+    if (blocked){
+      spawnDamageNumber({x:this.pos.x,y:1.9,z:this.pos.z}, 'BLOCK!', 'rgba(140,200,255,ALPHA)');
+      spawnBurst({x:this.pos.x,y:1.1,z:this.pos.z}, 'rgba(140,200,255,ALPHA)', 10, 1.8);
+    }
+    super.takeDamage(dmg, sourceIsPlayer);
+  }
+  die(){
+    this.lives -= 1;
+    if (this.lives > 0){
+      // still have lives left: respawn in place with full HP + brief invulnerability
+      this.hp = this.maxHp;
+      this.attackT = null; this.hitT = null; this.invulnT = 1.6;
+      spawnDamageNumber({x:this.pos.x,y:2.1,z:this.pos.z}, 'LIFE LOST', 'rgba(255,120,120,ALPHA)');
+      spawnBurst({x:this.pos.x,y:1.2,z:this.pos.z}, 'rgba(255,120,120,ALPHA)', 22, 3.2);
+      addShake(9, 0.3);
+      return;
+    }
+    this.lives = 0;
+    super.die();
+  }
+  addLife(){
+    if (this.lives < this.maxLives){ this.lives += 1; return true; }
+    return false;
+  }
+  onAttackHitFrame(){
+    const w = getItem('weapon', this.weaponId);
+    if (w.type === 'bow'){ this.fireArrow(w); return; }
+    const heavy = this.attackKind==='heavy';
+    const range = this.attackRange*(heavy?1.25:1.0)*(this.weaponRangeMult||1);
+    let hitAny=false;
+    for (const e of world.enemies){
+      if (e.dead) continue;
+      const dx=e.pos.x-this.pos.x, dz=e.pos.z-this.pos.z;
+      const dist = Math.hypot(dx,dz);
+      if (dist>range) continue;
+      const fx=Math.sin(this.facing), fz=-Math.cos(this.facing);
+      const nd = dist>0.001? {x:dx/dist,z:dz/dist}:{x:fx,z:fz};
+      const dot = fx*nd.x+fz*nd.z;
+      if (dot < 0.35) continue;
+      const base = heavy? (30+Math.random()*14) : (13+Math.random()*8);
+      const dmg = base*(this.weaponDmgMult||1);
+      e.takeDamage(dmg, true);
+      hitAny=true;
+      if (this.weaponKnockback){
+        const kb = heavy?1.4:0.9;
+        e.pos.x += nd.x*kb; e.pos.z += nd.z*kb;
+        const ed = Math.hypot(e.pos.x,e.pos.z);
+        if (ed > ARENA_R-0.5){ const k=(ARENA_R-0.5)/ed; e.pos.x*=k; e.pos.z*=k; }
+      }
+      spawnBurst({x:e.pos.x,y:1.2,z:e.pos.z}, w.hitColor, heavy?18:10, heavy?3.4:2.2);
+    }
+    if (hitAny){
+      addShake(heavy?10:5, heavy?0.25:0.12);
+      if (!heavy) this.fury = Math.min(this.maxFury, this.fury+16);
+    }
+    if (heavy) this.fury = 0;
+  }
+  fireArrow(w){
+    const heavy = this.attackKind==='heavy';
+    const fx=Math.sin(this.facing), fz=-Math.cos(this.facing);
+    let dx=fx, dz=fz;
+    if (this.attackTarget && !this.attackTarget.dead){
+      const tdx=this.attackTarget.pos.x-this.pos.x, tdz=this.attackTarget.pos.z-this.pos.z;
+      const td = Math.hypot(tdx,tdz);
+      if (td>0.001){ dx=tdx/td; dz=tdz/td; }
+    }
+    const base = heavy? (24+Math.random()*10) : (11+Math.random()*7);
+    const dmg = base*(w.dmgMult||1)*(heavy?1.35:1);
+    spawnArrow(this.pos.x+dx*0.45, this.pos.z+dz*0.45, dx, dz,
+      (w.arrowSpeed||15)*(heavy?1.1:1), dmg, w.hitColor, true, heavy);
+    addShake(heavy?6:2, heavy?0.15:0.06);
+    if (heavy) this.fury = 0;
+  }
+  update(dt){
+    if (this.invulnT>0) this.invulnT = Math.max(0, this.invulnT-dt);
+    if (world.shopOpen){ this.moveStep(dt,0,0); this.tick(dt); return; }
+    const w = getItem('weapon', this.weaponId);
+    const engageRange = (w.type==='bow') ? (w.bowRange||7)*(this.weaponRangeMult||1) : this.attackRange;
+    let vx=0, vz=0;
+    const dirs = [];
+    if (keys['w']||keys['arrowup'])    dirs.push({x:-1,z:-1});
+    if (keys['s']||keys['arrowdown'])  dirs.push({x:1,z:1});
+    if (keys['a']||keys['arrowleft'])  dirs.push({x:-1,z:1});
+    if (keys['d']||keys['arrowright']) dirs.push({x:1,z:-1});
+
+    if (this.attackT!=null){
+      // committed to swing/shot; hold position
+    } else if (dirs.length){
+      let dx=0,dz=0; dirs.forEach(d=>{dx+=d.x; dz+=d.z;});
+      const len = Math.hypot(dx,dz)||1;
+      vx = dx/len*this.speed; vz = dz/len*this.speed;
+      this.moveTarget = null; this.attackTarget = null;
+    } else if (this.attackTarget && !this.attackTarget.dead){
+      const dx=this.attackTarget.pos.x-this.pos.x, dz=this.attackTarget.pos.z-this.pos.z;
+      const dist = Math.hypot(dx,dz);
+      if (dist > engageRange*0.85){
+        vx = dx/dist*this.speed; vz = dz/dist*this.speed;
+      } else {
+        vx=0; vz=0; this.faceToward(this.attackTarget.pos.x, this.attackTarget.pos.z);
+        this.tryAttack();
+      }
+    } else if (this.moveTarget){
+      const dx=this.moveTarget.x-this.pos.x, dz=this.moveTarget.z-this.pos.z;
+      const dist = Math.hypot(dx,dz);
+      if (dist > 0.12){ vx=dx/dist*this.speed; vz=dz/dist*this.speed; }
+      else { this.moveTarget=null; }
+    }
+
+    this.moveStep(dt, vx, vz);
+    // keep inside arena
+    const d = Math.hypot(this.pos.x,this.pos.z);
+    if (d > ARENA_R-0.7){ const k=(ARENA_R-0.7)/d; this.pos.x*=k; this.pos.z*=k; }
+    this.tick(dt);
+  }
+  tryAttack(kind){
+    if (this.attackT!=null || this.attackCooldownTimer>0) return false;
+    let useKind = kind || (this.heavyQueued && this.fury>=this.maxFury ? 'heavy':'light');
+    if (useKind==='heavy' && this.fury<this.maxFury) useKind='light';
+    this.startAttack(useKind);
+    this.heavyQueued = false;
+    return true;
+  }
+}
+
+const ENEMY_NAMES = ['Fallen Revenant'];
+class Enemy extends Character {
+  constructor(x,z,mult){
+    mult = mult || 1;
+    const P = makeProportions(1.7, 0.94);
+    const palette = {skin:'#8a9a86', headHi:'#a9b8a0', cloth:'#4a3f36', dark:'#332a22',
+                      weapon:'#7a6b52', eyeGlow:'#7bff4a'};
+    super(x,z,P,palette);
+    this.isPlayer = false;
+    this.spawn = {x,z};
+    this.dmgMult = mult;
+    this.maxHp = (46+Math.random()*10) * mult; this.hp = this.maxHp;
+    this.speed = (1.9+Math.random()*0.3) * Math.min(1.35, 1+(mult-1)*0.4); this.attackRange = 1.35;
+    this.aggro = 6.2; this.state='idle'; this.wanderT=Math.random()*3;
+    this.wanderTarget=null;
+  }
+  onAttackHitFrame(){
+    const dx=world.player.pos.x-this.pos.x, dz=world.player.pos.z-this.pos.z;
+    const dist = Math.hypot(dx,dz);
+    if (dist > this.attackRange*1.25 || world.player.dead) return;
+    const fx=Math.sin(this.facing), fz=-Math.cos(this.facing);
+    const nd = dist>0.001? {x:dx/dist,z:dz/dist}:{x:fx,z:fz};
+    if (fx*nd.x+fz*nd.z < 0.25) return;
+    const dmg = (7+Math.random()*7) * this.dmgMult;
+    world.player.takeDamage(dmg, false);
+    addShake(6,0.15);
+    spawnBurst({x:world.player.pos.x,y:1.1,z:world.player.pos.z}, 'rgba(140,255,120,ALPHA)', 10, 2.0);
+  }
+  update(dt){
+    const player = world.player;
+    let vx=0, vz=0;
+    if (this.attackT==null && this.hitT==null){
+      const dx=player.pos.x-this.pos.x, dz=player.pos.z-this.pos.z;
+      const dist = Math.hypot(dx,dz);
+      if (this.state==='idle'){
+        if (dist < this.aggro && !player.dead) this.state='chase';
+        else {
+          this.wanderT -= dt;
+          if (this.wanderT<=0){
+            this.wanderT = 2+Math.random()*3;
+            const a = Math.random()*Math.PI*2, r=Math.random()*1.4;
+            this.wanderTarget = {x:this.spawn.x+Math.cos(a)*r, z:this.spawn.z+Math.sin(a)*r};
+          }
+          if (this.wanderTarget){
+            const wdx=this.wanderTarget.x-this.pos.x, wdz=this.wanderTarget.z-this.pos.z;
+            const wd = Math.hypot(wdx,wdz);
+            if (wd>0.15){ vx=wdx/wd*this.speed*0.35; vz=wdz/wd*this.speed*0.35; }
+          }
+        }
+      } else if (this.state==='chase'){
+        if (player.dead){ this.state='idle'; }
+        else if (dist <= this.attackRange*0.92 && this.attackCooldownTimer<=0){
+          this.faceToward(player.pos.x, player.pos.z);
+          this.startAttack('light');
+        } else if (dist>0.05){
+          vx = dx/dist*this.speed; vz = dz/dist*this.speed;
+        }
+      }
+    }
+    this.moveStep(dt, vx, vz);
+    this.tick(dt);
+    if (this.dead && this.removeAfter==null && this.deathT>=1) this.removeAfter = true;
+  }
+}
+
+// ============================================================ WORLD =======
+const keys = {};
+let shiftHeld = false;
+window.addEventListener('keydown', (e)=>{
+  keys[e.key.toLowerCase()] = true;
+  if (e.key==='Shift') shiftHeld = true;
+  if (e.code==='Space'){ e.preventDefault(); if (world.state==='PLAYING' && !world.shopOpen) attemptSpaceAttack(); }
+  if (e.key==='b' || e.key==='B'){ if (world.state==='PLAYING') toggleShop(); }
+  if (e.key==='Escape'){ if (paypalBusy) {} else if (world.shopOpen) closeShop(); }
+});
+window.addEventListener('keyup', (e)=>{
+  keys[e.key.toLowerCase()] = false;
+  if (e.key==='Shift') shiftHeld = false;
+});
+function attemptSpaceAttack(){
+  const p = world.player;
+  const w = getItem('weapon', p.weaponId);
+  const range = (w.type==='bow' ? (w.bowRange||7)*(p.weaponRangeMult||1) : p.attackRange)*1.1;
+  let best=null, bestD=Infinity;
+  for (const e of world.enemies){
+    if (e.dead) continue;
+    const d = Math.hypot(e.pos.x-p.pos.x, e.pos.z-p.pos.z);
+    if (d < range && d<bestD){ best=e; bestD=d; }
+  }
+  if (best){ p.faceToward(best.pos.x, best.pos.z); p.attackTarget = best; }
+  p.tryAttack(shiftHeld && p.fury>=p.maxFury ? 'heavy':'light');
+}
+
+let isMouseDown = false;
+function hitTestEnemy(mx,my){
+  let best=null, bestD=Infinity;
+  for (const e of world.enemies){
+    if (e.dead) continue;
+    const s = projectIso({x:e.pos.x,y:0.9,z:e.pos.z});
+    const d = Math.hypot(s.x-mx, s.y-my);
+    if (d < 46*DPR && d<bestD){ best=e; bestD=d; }
+  }
+  return best;
+}
+function pointerPos(e){
+  const r = canvas.getBoundingClientRect();
+  const cx = (e.touches? e.touches[0].clientX : e.clientX) - r.left;
+  const cy = (e.touches? e.touches[0].clientY : e.clientY) - r.top;
+  return {x:cx*DPR, y:cy*DPR};
+}
+canvas.addEventListener('mousedown', (e)=>{
+  if (world.state!=='PLAYING' || world.shopOpen) return;
+  isMouseDown = true;
+  const pt = pointerPos(e);
+  const enemy = hitTestEnemy(pt.x, pt.y);
+  const p = world.player;
+  if (enemy){
+    p.attackTarget = enemy; p.moveTarget = null;
+    if (e.shiftKey) p.heavyQueued = true;
+  } else {
+    const g = unprojectGround(pt.x, pt.y);
+    p.moveTarget = g; p.attackTarget = null;
+  }
+});
+canvas.addEventListener('mousemove', (e)=>{
+  if (!isMouseDown || world.state!=='PLAYING' || world.shopOpen) return;
+  const p = world.player;
+  if (p.attackTarget) return;
+  const pt = pointerPos(e);
+  const enemy = hitTestEnemy(pt.x, pt.y);
+  if (enemy){ p.attackTarget = enemy; p.moveTarget=null; return; }
+  p.moveTarget = unprojectGround(pt.x, pt.y);
+});
+window.addEventListener('mouseup', ()=>{ isMouseDown=false; });
+canvas.addEventListener('contextmenu', (e)=>e.preventDefault());
+
+const world = {
+  state:'TITLE',
+  player: new Player(0,2.5),
+  enemies: [],
+  killCount: 0,
+  spawnCooldown: 0,
+  shopOpen: false,
+  floor: 1,
+  floorKills: 0,
+  floorQuota: 8,
+  stairsSpawned: false,
+  stairs: null,
+  selectedItem: {weapon:null, armor:null, shield:null},
+};
+function enemyMultForFloor(floor){ return 1 + (floor-1)*0.16; }
+function maxEnemiesForFloor(floor){ return Math.min(11, 4 + Math.floor(floor*0.75)); }
+function randomSpawnPoint(){
+  for (let tries=0; tries<20; tries++){
+    const a = Math.random()*Math.PI*2, r = 3.2+Math.random()*(ARENA_R-4.6);
+    const x = Math.cos(a)*r, z = Math.sin(a)*r;
+    if (Math.hypot(x-world.player.pos.x, z-world.player.pos.z) > 3.5) return {x,z};
+  }
+  return {x:ARENA_R*0.6, z:0};
+}
+function spawnEnemy(){
+  const {x,z} = randomSpawnPoint();
+  world.enemies.push(new Enemy(x,z, enemyMultForFloor(world.floor)));
+}
+function spawnStairs(){
+  const {x,z} = randomSpawnPoint();
+  world.stairs = {x,z};
+  world.stairsSpawned = true;
+  showFloorBanner('階段が出現した！', false);
+}
+function descendFloor(){
+  world.floor += 1;
+  world.floorKills = 0;
+  world.floorQuota = 7 + world.floor*3;
+  world.stairsSpawned = false;
+  world.stairs = null;
+  ARENA_R = Math.min(32, 18 + (world.floor-1)*1.3);
+  buildArena();
+  world.enemies = [];
+  arrows.length = 0;
+  world.player.pos.x = 0; world.player.pos.z = 2.5;
+  world.player.moveTarget = null; world.player.attackTarget = null;
+  world.player.hp = Math.min(world.player.maxHp, world.player.hp + world.player.maxHp*0.4);
+  const initial = Math.min(3+Math.floor(world.floor/2), 6);
+  for (let i=0;i<initial;i++) spawnEnemy();
+  showFloorBanner('FLOOR '+world.floor, true);
+}
+function showFloorBanner(text, big){
+  const el = document.getElementById('floorBanner');
+  if (!el) return;
+  el.textContent = text;
+  el.classList.remove('show', 'big');
+  void el.offsetWidth; // restart CSS animation
+  if (big) el.classList.add('big');
+  el.classList.add('show');
+}
+function resetGame(){
+  world.state='PLAYING';
+  const prevOwned = world.player.owned, prevEquipped = world.player.equipped;
+  world.player = new Player(0,2.5); // reloads owned/equipped items from localStorage save
+  // safety net: also carry over in-memory purchases in case localStorage was unavailable
+  for (const cat of ['weapon','armor','shield']){
+    for (const id of prevOwned[cat]) world.player.owned[cat].add(id);
+    world.player.equipItem(cat, prevEquipped[cat], true);
+  }
+  world.enemies = [];
+  arrows.length = 0;
+  world.killCount = 0;
+  world.floor = 1; world.floorKills = 0; world.floorQuota = 8;
+  world.stairsSpawned = false; world.stairs = null;
+  ARENA_R = 18;
+  buildArena();
+  for (let i=0;i<3;i++) spawnEnemy();
+  document.getElementById('gameOver').style.display='none';
+  document.getElementById('hud').style.display='flex';
+  document.getElementById('shopBtn').style.display='inline-block';
+}
+for (let i=0;i<3;i++) spawnEnemy(); // idle title-screen scene has creatures too
+
+document.getElementById('titleScreen').addEventListener('click', (e)=>{
+  if (e.target && e.target.id === 'titleShopLink') return; // handled separately
+  document.getElementById('titleScreen').style.display='none';
+  document.getElementById('hud').style.display='flex';
+  document.getElementById('shopBtn').style.display='inline-block';
+  world.state='PLAYING';
+  setTimeout(()=>{ const tip=document.getElementById('tip'); if(tip) tip.style.opacity='0'; }, 6500);
+});
+document.getElementById('titleShopLink').addEventListener('click', (e)=>{
+  e.stopPropagation();
+  openShop();
+});
+document.getElementById('gameOver').addEventListener('click', resetGame);
+
+function updateHUD(){
+  const p = world.player;
+  document.getElementById('hpFill').style.height = clamp(p.hp/p.maxHp,0,1)*100+'%';
+  document.getElementById('hpLabel').textContent = Math.max(0,Math.round(p.hp));
+  document.getElementById('furyFill').style.height = clamp(p.fury/p.maxFury,0,1)*100+'%';
+  document.getElementById('killCount').textContent = 'SOULS SLAIN: '+world.killCount+'  (FLOOR '+world.floor+')';
+  document.getElementById('furyReadyMsg').classList.toggle('show', p.fury>=p.maxFury);
+  renderLivesRow(p.lives, p.maxLives);
+  const stairsMsg = document.getElementById('stairsMsg');
+  if (stairsMsg) stairsMsg.classList.toggle('show', world.stairsSpawned);
+}
+function renderLivesRow(lives, maxLives){
+  const row = document.getElementById('livesRow');
+  if (!row) return;
+  let html = '';
+  for (let i=0;i<maxLives;i++) html += '<span class="heart'+(i<lives?' filled':'')+'">&#10084;</span>';
+  row.innerHTML = html;
+}
+
+// ============================================================ SHOP / PAY ===
+let paypalBusy = false;
+world.shopCategory = 'weapon';
+const LIFE_PRICE = 300;
+const CONTINUE_PRICE = 300;
+const BUNDLE = {
+  id:'ultimate', name:'伝説の最強セット',
+  items:[{cat:'weapon',id:'excalibur'},{cat:'armor',id:'dragon'},{cat:'shield',id:'aegis'}],
+  price:148000, desc:'エクスカリバー + ドラゴンスケイルメイル + イージスの盾 を今すぐ全て入手し装備します。',
+};
+
+function fmtYen(n){ return '¥' + n.toLocaleString('ja-JP'); }
+function stars(mult){ return '★'.repeat(Math.max(1, Math.min(5, Math.round(mult*2.2)))); }
+
+function statsHtml(category, it){
+  if (category === 'weapon'){
+    if (it.type === 'bow'){
+      return `威力 <b>${stars(it.dmgMult)}</b>&nbsp;&nbsp;連射 <b>${stars(it.spdMult)}</b>&nbsp;&nbsp;` +
+             `射程 <b>${(it.bowRange||0).toFixed(1)}m</b>`;
+    }
+    return `威力 <b>${stars(it.dmgMult)}</b>&nbsp;&nbsp;速さ <b>${stars(it.spdMult)}</b>&nbsp;&nbsp;` +
+           `間合い <b>${stars(it.rangeMult)}</b>`;
+  }
+  if (category === 'armor'){
+    return `防御 <b>${Math.round(it.defense*100)}%軽減</b>&nbsp;&nbsp;機動力 <b>${Math.round((it.speedMult!=null?it.speedMult:1)*100)}%</b>`;
+  }
+  if (category === 'shield'){
+    return it.block>0 ? `ブロック率 <b>${Math.round(it.block*100)}%</b> (成功時ダメージ70%軽減)` : `盾を装備しない身軽なスタイル`;
+  }
+  return '';
+}
+
+function renderShopGrid(){
+  const grid = document.getElementById('weaponGrid');
+  const p = world.player;
+  const category = world.shopCategory;
+
+  if (category === 'life'){
+    grid.innerHTML = '';
+    const card = document.createElement('div');
+    card.className = 'wcard selected';
+    card.innerHTML = `
+      <div class="wswatch" style="--wc1:#ff5a6a;--wc2:#3a0a10;"></div>
+      <div class="wname">予備のライフ</div>
+      <div class="wpriceSmall">${'&#10084;'.repeat(p.lives)}${'&#9825;'.repeat(p.maxLives-p.lives)}</div>
+    `;
+    grid.appendChild(card);
+    renderLifeActionBar();
+    return;
+  }
+
+  const set = ITEM_SETS[category];
+  if (!world.selectedItem[category] || !set.find(it=>it.id===world.selectedItem[category])){
+    world.selectedItem[category] = p.equipped[category];
+  }
+  grid.innerHTML = '';
+  for (const it of set){
+    const owned = p.owned[category].has(it.id);
+    const equipped = p.equipped[category] === it.id;
+    const selected = world.selectedItem[category] === it.id;
+    const card = document.createElement('div');
+    card.className = 'wcard' + (selected ? ' selected' : '') + (it.legendary ? ' legendary' : '');
+    card.innerHTML = `
+      <div class="wswatch" style="--wc1:${it.c1};--wc2:${it.c2};"></div>
+      ${equipped ? '<div class="badge equippedBadge">装備中</div>' : owned ? '<div class="badge ownedBadge">所持</div>' : ''}
+      <div class="wname">${it.name}${it.legendary ? '<span class="legendTag">LEGENDARY</span>' : ''}</div>
+      <div class="wpriceSmall">${it.price===0 ? '所持済み' : fmtYen(it.price)}</div>
+    `;
+    card.addEventListener('click', ()=>{ world.selectedItem[category] = it.id; renderShopGrid(); });
+    grid.appendChild(card);
+  }
+  renderActionBar(category);
+}
+
+function renderActionBar(category){
+  const p = world.player;
+  const it = getItem(category, world.selectedItem[category]);
+  document.getElementById('sabSwatch').style.setProperty('--wc1', it.c1);
+  document.getElementById('sabSwatch').style.setProperty('--wc2', it.c2);
+  document.getElementById('sabName').innerHTML = it.name + (it.legendary ? '<span class="legendTag">LEGENDARY</span>' : '');
+  document.getElementById('sabDesc').textContent = it.desc;
+  document.getElementById('sabStats').innerHTML = statsHtml(category, it);
+  document.getElementById('sabPrice').textContent = it.price===0 ? '所持済み' : fmtYen(it.price);
+
+  const owned = p.owned[category].has(it.id);
+  const equipped = p.equipped[category] === it.id;
+  const btn = document.getElementById('sabActionBtn');
+  btn.onclick = null;
+  btn.disabled = false;
+  if (equipped){
+    btn.textContent = '装備中';
+    btn.disabled = true;
+    btn.className = 'equipBtn big current';
+  } else if (owned){
+    btn.textContent = '装備する';
+    btn.className = 'equipBtn big';
+    btn.onclick = ()=>{ p.equipItem(category, it.id); renderShopGrid(); };
+  } else {
+    btn.innerHTML = '<span class="pplogo">Pay</span><span class="pplogo2">Pal</span>&nbsp;で購入';
+    btn.className = 'payBtn big';
+    btn.onclick = ()=> openPaypalCheckout(category, it);
+  }
+}
+
+function renderLifeActionBar(){
+  const p = world.player;
+  document.getElementById('sabSwatch').style.setProperty('--wc1', '#ff5a6a');
+  document.getElementById('sabSwatch').style.setProperty('--wc2', '#3a0a10');
+  document.getElementById('sabName').textContent = '予備のライフ';
+  document.getElementById('sabDesc').textContent = `現在 ${p.lives} / ${p.maxLives}。HPが0になっても1つ消費して復活できる。`;
+  document.getElementById('sabStats').innerHTML = '';
+  document.getElementById('sabPrice').textContent = fmtYen(LIFE_PRICE);
+  const btn = document.getElementById('sabActionBtn');
+  btn.onclick = null;
+  if (p.lives >= p.maxLives){
+    btn.textContent = '上限に達しています';
+    btn.className = 'equipBtn big current';
+    btn.disabled = true;
+  } else {
+    btn.disabled = false;
+    btn.className = 'payBtn big';
+    btn.innerHTML = '<span class="pplogo">Pay</span><span class="pplogo2">Pal</span>&nbsp;で購入 (+1)';
+    btn.onclick = ()=> openPaypalCheckout('life', {id:'life', name:'予備のライフ', price:LIFE_PRICE});
+  }
+}
+
+function isBundleOwned(){ return BUNDLE.items.every(x=> world.player.owned[x.cat].has(x.id)); }
+function isBundleEquipped(){ return BUNDLE.items.every(x=> world.player.equipped[x.cat]===x.id); }
+function renderBundleBanner(){
+  const btn = document.getElementById('bundleBuyBtn');
+  btn.onclick = null;
+  if (isBundleEquipped()){
+    btn.textContent = '装備中';
+    btn.disabled = true;
+    btn.className = 'equipBtn big current';
+  } else if (isBundleOwned()){
+    btn.disabled = false;
+    btn.textContent = '全て装備する';
+    btn.className = 'equipBtn big';
+    btn.onclick = ()=>{ BUNDLE.items.forEach(x=> world.player.equipItem(x.cat, x.id)); renderShopGrid(); renderBundleBanner(); };
+  } else {
+    btn.disabled = false;
+    btn.innerHTML = '<span class="pplogo">Pay</span><span class="pplogo2">Pal</span>&nbsp;で即入手';
+    btn.className = 'payBtn big';
+    btn.onclick = ()=> openPaypalCheckout('bundle', BUNDLE);
+  }
+}
+
+function switchShopTab(category){
+  world.shopCategory = category;
+  document.querySelectorAll('.shopTab').forEach(btn=>{
+    btn.classList.toggle('current', btn.dataset.cat === category);
+  });
+  renderShopGrid();
+}
+document.querySelectorAll('.shopTab').forEach(btn=>{
+  btn.addEventListener('click', ()=> switchShopTab(btn.dataset.cat));
+});
+
+function openShop(){
+  world.shopOpen = true;
+  renderShopGrid();
+  renderBundleBanner();
+  document.getElementById('shopScreen').style.display = 'flex';
+}
+function closeShop(){
+  world.shopOpen = false;
+  document.getElementById('shopScreen').style.display = 'none';
+  closePaypalModal();
+}
+function toggleShop(){ world.shopOpen ? closeShop() : openShop(); }
+
+document.getElementById('shopBtn').addEventListener('click', openShop);
+document.getElementById('shopClose').addEventListener('click', closeShop);
+document.getElementById('continueBuyBtn').addEventListener('click', (e)=>{
+  e.stopPropagation();
+  openPaypalCheckout('continue', {id:'continue', name:'コンティニュー (ライフ+1で復帰)', price:CONTINUE_PRICE});
+});
+
+function closePaypalModal(){
+  paypalBusy = false;
+  document.getElementById('paypalModal').style.display = 'none';
+}
+
+function openPaypalCheckout(category, item){
+  paypalBusy = false;
+  const modal = document.getElementById('paypalModal');
+  const box = document.getElementById('ppboxInner');
+  box.innerHTML = `
+    <div class="ppheader"><b>Pay</b>Pal <span style="opacity:.7;font-size:12px;">| チェックアウト (デモ)</span></div>
+    <div class="ppbody">
+      <div class="ppRow"><span>商品</span><b>${item.name}</b></div>
+      <div class="ppRow"><span>支払い方法</span><b>demo-user@example.com</b></div>
+      <div class="ppRow ppTotal"><span>合計</span><span>${fmtYen(item.price)}</span></div>
+      <button class="ppPayBtn" id="ppPayBtn">今すぐ支払う (ワンクリック)</button>
+      <button class="ppCancel" id="ppCancelBtn">キャンセル</button>
+      <div class="ppDisclaimer">※これはTGS展示デモ用のダミー決済画面です。実際の請求・送金は一切発生しません。</div>
+    </div>
+  `;
+  document.getElementById('ppPayBtn').addEventListener('click', ()=> runFakePayment(category, item));
+  document.getElementById('ppCancelBtn').addEventListener('click', closePaypalModal);
+  modal.style.display = 'flex';
+}
+
+function runFakePayment(category, item){
+  paypalBusy = true;
+  const box = document.getElementById('ppboxInner');
+  box.innerHTML = `
+    <div class="ppStatus">
+      <div class="ppSpinner"></div>
+      <div style="font-size:14px;color:#333;">決済処理中...</div>
+    </div>
+  `;
+  setTimeout(()=>{
+    let successText = `${item.name} を装備しました`;
+    if (category === 'bundle'){
+      BUNDLE.items.forEach(x=> world.player.purchaseItem(x.cat, x.id));
+      successText = '最強セットを装備しました';
+    } else if (category === 'life'){
+      world.player.addLife();
+      successText = `ライフが1つ増えました (${world.player.lives}/${world.player.maxLives})`;
+    } else if (category === 'continue'){
+      world.player.addLife();
+      world.player.hp = world.player.maxHp;
+      world.player.dead = false; world.player.deathT = null;
+      world.player.invulnT = 2.0;
+      world.state = 'PLAYING';
+      document.getElementById('gameOver').style.display = 'none';
+      document.getElementById('hud').style.display = 'flex';
+      document.getElementById('shopBtn').style.display = 'inline-block';
+      successText = '復帰しました！';
+    } else {
+      world.player.purchaseItem(category, item.id);
+    }
+    box.innerHTML = `
+      <div class="ppStatus">
+        <div class="ppCheck">&#10003;</div>
+        <div style="font-size:15px;color:#111;font-weight:bold;">購入が完了しました</div>
+        <div style="font-size:12px;color:#888;margin-top:6px;">${successText}</div>
+      </div>
+    `;
+    setTimeout(()=>{
+      closePaypalModal();
+      renderShopGrid();
+      renderBundleBanner();
+    }, 1100);
+  }, 1100);
+}
+
+function updateWorld(dt){
+  if (world.state==='PLAYING'){
+    world.player.update(dt);
+    if (world.player.dead && world.player.deathT>=1 && world.state!=='GAMEOVER_SHOWN'){
+      world.state='GAMEOVER_SHOWN';
+      document.getElementById('finalKills').textContent = 'Souls Slain: '+world.killCount;
+      document.getElementById('finalFloor').textContent = 'Floor Reached: '+world.floor;
+      document.getElementById('gameOver').style.display='flex';
+      document.getElementById('hud').style.display='none';
+      document.getElementById('shopBtn').style.display='none';
+      closeShop();
+    }
+    for (const e of world.enemies){
+      e.update(dt);
+      if (e.dead && !e._killCounted){
+        e._killCounted = true;
+        world.killCount++;
+        world.floorKills++;
+      }
+    }
+    world.enemies = world.enemies.filter(e=> !(e.dead && e.removeAfter));
+    const maxEnemies = maxEnemiesForFloor(world.floor);
+    if (world.enemies.length < maxEnemies){
+      world.spawnCooldown -= dt;
+      if (world.spawnCooldown<=0){ spawnEnemy(); world.spawnCooldown = 2.2+Math.random()*1.6; }
+    }
+    if (!world.stairsSpawned && world.floorKills >= world.floorQuota){
+      spawnStairs();
+    }
+    if (world.stairs && !world.player.dead){
+      const sd = Math.hypot(world.player.pos.x-world.stairs.x, world.player.pos.z-world.stairs.z);
+      if (sd < 1.3) descendFloor();
+    }
+    updateHUD();
+  } else {
+    // idle scene animation for title/background
+    world.player.idleT += dt;
+    for (const e of world.enemies){ e.idleT += dt; }
+  }
+  // camera follow
+  const followX = world.state==='PLAYING' ? world.player.pos.x : 0;
+  const followZ = world.state==='PLAYING' ? world.player.pos.z : 1.5;
+  cam.x = lerp(cam.x, followX, Math.min(1, dt*4.5));
+  cam.z = lerp(cam.z, followZ, Math.min(1, dt*4.5));
+  if (shakeTime>0){ shakeTime-=dt; } else { shakeMag*=0.9; }
+}
+
+let perfNow = 0;
+const _screenCenterBase = screenCenter;
+function screenCenterShaken(){
+  const c = _screenCenterBase();
+  if (shakeTime>0){
+    c.x += (Math.random()*2-1)*shakeMag*DPR;
+    c.y += (Math.random()*2-1)*shakeMag*DPR;
+  }
+  return c;
+}
+screenCenter = screenCenterShaken;
+
+function renderFrame(dt){
+  drawBackground();
+  drawFloor(perfNow);
+  drawTorchGlow(perfNow);
+  drawStairs();
+
+  const items = [];
+  pillars.forEach(p=> items.push({depth:p.x+p.z-0.05, draw:()=>drawPillar(p)}));
+  items.push({depth:world.player.pos.x+world.player.pos.z, draw:()=>world.player.render()});
+  world.enemies.forEach(e=> items.push({depth:e.pos.x+e.pos.z, draw:()=>e.render()}));
+  items.sort((a,b)=>a.depth-b.depth);
+  items.forEach(it=>it.draw());
+
+  torches.forEach(drawTorchStick);
+  updateDrawArrows(dt);
+  updateDrawDust(dt);
+  updateDrawParticles(dt);
+  updateDrawDamageNumbers(dt);
+}
+
+let lastT = null;
+function loop(ts){
+  if (lastT==null) lastT = ts;
+  let dt = (ts-lastT)/1000; lastT = ts;
+  dt = Math.min(dt, 0.05);
+  perfNow = ts/1000;
+  updateWorld(dt);
+  renderFrame(dt);
+  requestAnimationFrame(loop);
+}
+requestAnimationFrame(loop);
+
+</script>
+</body>
+</html>
