@@ -1673,8 +1673,8 @@ const WEAPONS = [
     desc:'狙いに時間がかかるが高威力・長射程の弓。', c1:'#3a2c18', c2:'#8a6a3e' },
   { id:'excalibur', name:'エクスカリバー', price:99800, type:'melee', legendary:true, fireBolt:true,
     dmgMult:3.2, spdMult:1.15, rangeMult:1.4, bladeLen:0.68, glow:true,
-    color:'#fff6c8', hitColor:'rgba(255,250,190,ALPHA)',
-    desc:'伝説の聖剣。斬撃で光の斬撃波を放ち、常に聖なる光を身に纏う。TGS特別価格。', c1:'#8a7a2a', c2:'#fff6c8' },
+    color:'#8ad4ff', hitColor:'rgba(0,156,222,ALPHA)',
+    desc:'伝説の聖剣。斬撃で光の斬撃波を放ち、常にPayPalブルーの聖なる光を身に纏う。TGS特別価格。', c1:'#003087', c2:'#4ac8ff' },
 ];
 const ARMORS = [
   { id:'cloth',  name:'布の服', price:0, defense:0.00, speedMult:1.00,
@@ -1690,8 +1690,8 @@ const ARMORS = [
     cloth:'#8a9099', dark:'#4a4e54', bulk:1.20,
     desc:'重厚な全身鎧。防御力は高いが機動力が落ちる。', c1:'#5a6066', c2:'#c8d0d8' },
   { id:'dragon', name:'ドラゴンスケイルメイル', price:45000, defense:0.55, speedMult:1.00, legendary:true,
-    cloth:'#8a1a1a', dark:'#4a0e0e', bulk:1.15, glow:true,
-    desc:'竜の鱗から鍛えた伝説の鎧。炎耐性と圧倒的な防御力。', c1:'#5a0e0e', c2:'#ff5a3c' },
+    cloth:'#0a2f6b', dark:'#001a45', bulk:1.15, glow:true,
+    desc:'竜の鱗から鍛えた伝説の鎧。PayPalブルーに輝き、圧倒的な防御力を誇る。', c1:'#001a45', c2:'#009cde' },
 ];
 const SHIELDS = [
   { id:'none',   name:'盾なし', price:0, block:0.00, size:0,
@@ -1706,8 +1706,8 @@ const SHIELDS = [
     color:'#6a7480', rim:'#3a4048',
     desc:'大型の盾。高いブロック率で身を守る。', c1:'#3a4048', c2:'#9aa8b8' },
   { id:'aegis',  name:'イージスの盾', price:38000, block:0.55, size:0.40, legendary:true,
-    color:'#4ac8ff', rim:'#0a5a8a', glow:true,
-    desc:'女神の加護が宿る伝説の盾。驚異的な防御性能。TGS特別価格。', c1:'#0a5a8a', c2:'#8ae8ff' },
+    color:'#009cde', rim:'#003087', glow:true,
+    desc:'女神の加護が宿る伝説の盾。PayPalブルーに輝く驚異的な防御性能。TGS特別価格。', c1:'#003087', c2:'#4ac8ff' },
 ];
 const HELMETS = [
   { id:'hood',    name:'旅人のフード', price:0, defense:0.02, style:'hood',
@@ -1724,8 +1724,8 @@ const HELMETS = [
     desc:'頭部全体を覆う重厚な兜。頂には勇壮な羽飾り。', c1:'#454b52', c2:'#aab2b8' },
   { id:'dragon_skull', name:'ドラゴンスカルヘルム', price:52000, defense:0.24, style:'dragonskull',
     metal:true, horns:true, legendary:true, glow:true,
-    color:'#5a1010', trim:'#2a0808', eyeGlow:'#ff5a2a',
-    desc:'竜の頭骨を象った伝説の兜。眼窩に業火が宿る。TGS特別価格。', c1:'#2a0808', c2:'#ff5a2a' },
+    color:'#0a2f6b', trim:'#001a45', eyeGlow:'#4ac8ff',
+    desc:'竜の頭骨を象った伝説の兜。眼窩にPayPalブルーの光が宿る。TGS特別価格。', c1:'#001a45', c2:'#4ac8ff' },
 ];
 const MOUNTS = [
   { id:'none',   name:'徒歩', price:0, speedMult:1.00, size:0,
@@ -1737,8 +1737,8 @@ const MOUNTS = [
     color:'#4a3222', maneColor:'#1a1210',
     desc:'鍛え上げられた軍馬。安定した速度と迫力の走り。', c1:'#2a1c14', c2:'#7a5a3a' },
   { id:'nightmare', name:'ナイトメア', price:68000, speedMult:1.85, size:1.08, legendary:true, glow:true,
-    color:'#241018', maneColor:'#ff5a2a', eyeGlow:'#ff5a2a',
-    desc:'冥府より召喚された漆黒の悪馬。蹄が炎を纏う。TGS特別価格。', c1:'#120810', c2:'#ff5a2a' },
+    color:'#0a1f45', maneColor:'#4ac8ff', eyeGlow:'#4ac8ff',
+    desc:'冥府より召喚された漆黒の悪馬。蹄がPayPalブルーの炎を纏う。TGS特別価格。', c1:'#001a45', c2:'#4ac8ff' },
 ];
 const ITEM_SETS = { weapon: WEAPONS, armor: ARMORS, shield: SHIELDS, helmet: HELMETS, mount: MOUNTS };
 function getItem(category, id){
