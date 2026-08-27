@@ -57,7 +57,7 @@
   #furyReadyMsg{font-size:10px;color:#7fd0ff;letter-spacing:1px;opacity:0;transition:opacity .3s;text-shadow:0 0 6px #000;white-space:nowrap;}
   #furyReadyMsg.show{opacity:1;}
   @media (max-width:640px){
-    #hud{padding:4px 50px 4px 6px;min-height:44px;gap:1vw;}
+    #hud{padding:4px 92px 4px 6px;min-height:44px;gap:1vw;}
     .orb{width:32px;height:32px;border-width:2px;}
     .orb .label{font-size:8px;}
     #killCount{font-size:10px;}
@@ -98,10 +98,13 @@
        overrides any `display` set here -- so the two-line layout relies on the label span being
        display:block (forcing a line break) inside a plain inline-block button, not on flex,
        and still works regardless of which inline display value JS applies. */
-    #shopBtn{font-size:15px;padding:3px 4px 4px;top:6px;right:6px;width:40px;height:auto;
-      line-height:1.05;text-align:center;border-radius:8px;}
-    .shopBtnLabel{display:block;font-size:7px;letter-spacing:.5px;margin-top:1px;}
-    #viewModeBtn{top:52px;left:6px;font-size:9px;padding:5px 8px;}
+    /* ~2x the previous mobile footprint -- easier to tap and to recognize as "the shop
+       button" at a glance, at the cost of reserving more space on the right of the HUD bar
+       (bumped below) so it still never overlaps the HP/fury gauges. */
+    #shopBtn{font-size:30px;padding:6px 8px 8px;top:6px;right:6px;width:80px;height:auto;
+      line-height:1.05;text-align:center;border-radius:14px;}
+    .shopBtnLabel{display:block;font-size:14px;letter-spacing:.5px;margin-top:2px;}
+    #viewModeBtn{top:78px;left:6px;font-size:9px;padding:5px 8px;}
   }
 
   /* mobile virtual controller: joystick bottom-left, attack buttons bottom-right.
